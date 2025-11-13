@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		910C2F792EC4B99200D044AB /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 910C2F782EC4B99200D044AB /* FirebaseAuth */; };
+		910C2F7B2EC4B99200D044AB /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 910C2F7A2EC4B99200D044AB /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		91F8FABA2EC22A3000B77B17 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				910C2F792EC4B99200D044AB /* FirebaseAuth in Frameworks */,
+				910C2F7B2EC4B99200D044AB /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +119,8 @@
 			);
 			name = AmbuKit;
 			packageProductDependencies = (
+				910C2F782EC4B99200D044AB /* FirebaseAuth */,
+				910C2F7A2EC4B99200D044AB /* FirebaseFirestore */,
 			);
 			productName = AmbuKit;
 			productReference = 91F8FAAA2EC22A2E00B77B17 /* AmbuKit.app */;
@@ -195,6 +204,9 @@
 			);
 			mainGroup = 91F8FAA12EC22A2E00B77B17;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				910C2F772EC4B99200D044AB /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 91F8FAAB2EC22A2E00B77B17 /* Products */;
 			projectDirPath = "";
@@ -521,13 +533,15 @@
 		91F8FAD52EC22A3000B77B17 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = M968R2AMGD;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = gliadev.AmbuKitUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -578,6 +592,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		910C2F772EC4B99200D044AB /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		910C2F782EC4B99200D044AB /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 910C2F772EC4B99200D044AB /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		910C2F7A2EC4B99200D044AB /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 910C2F772EC4B99200D044AB /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 91F8FAA22EC22A2E00B77B17 /* Project object */;
 }

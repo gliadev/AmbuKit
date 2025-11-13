@@ -6,13 +6,34 @@
 //
 
 import SwiftUI
+import SwiftData 
 
 struct MainTabView: View {
+    let currentUser: User
+
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        let caps = UIPermissions.userMgmt(currentUser)
+        let showAdminTab = UIPermissions.canCreateKits(currentUser)
+                         || UIPermissions.canEditThresholds(currentUser)
+                         || caps.create || caps.update || caps.delete
+
+        TabView {
+            InventoryView(currentUser: currentUser)
+                .tabItem { Label("Inventario", systemImage: "shippingbox") }
+
+            if showAdminTab {
+                AdminView(currentUser: currentUser)
+                    .tabItem { Label("Gestión", systemImage: "gearshape") }
+            }
+
+            ProfileView(currentUser: currentUser)
+                .tabItem { Label("Perfil", systemImage: "person") }
+        }
     }
 }
 
-#Preview {
-    MainTabView()
+#Preview("MainTab – Programmer") {
+    MainTabView(currentUser: PreviewSupport.user("programmer"))
+        .modelContainer(PreviewSupport.container)
 }
+

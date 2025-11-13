@@ -6,3 +6,7 @@
 //
 
 import Foundation
+
+
+public enum EntityKind: String, Codable, CaseIterable { case base, vehicle, kit, catalogItem, kitItem, user, category, unit, audit }
+

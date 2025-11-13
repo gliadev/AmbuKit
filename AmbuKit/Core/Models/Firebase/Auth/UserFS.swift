@@ -10,7 +10,7 @@ import FirebaseFirestore
 
 /// Modelo de usuario para Firestore
 /// Equivalente a User.swift de SwiftData pero adaptado a Firebase
-struct UserFS: Codable, Identifiable, Equatable {
+struct UserFS: Codable, Identifiable {
     
     // MARK: - Properties
     

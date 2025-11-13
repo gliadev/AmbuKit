@@ -7,9 +7,15 @@
 
 import SwiftUI
 import SwiftData
+import FirebaseCore
 
 @main
 struct AmbuKitApp: App {
+    
+    // MARK: - App State
+    @StateObject private var appState = AppState.shared
+    
+    // MARK: - SwiftData (Temporal - se eliminará después)
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -22,11 +28,22 @@ struct AmbuKitApp: App {
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
+    
+    // MARK: - Initialization
+    init() {
+        // Configurar Firebase
+        FirebaseApp.configure()
+        
+        print("✅ Firebase configurado correctamente")
+        print("📱 AmbuKit iniciado🤪")
+    }
 
+    // MARK: - Body
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environmentObject(appState)
+                .modelContainer(sharedModelContainer) // Temporal
         }
-        .modelContainer(sharedModelContainer)
     }
 }

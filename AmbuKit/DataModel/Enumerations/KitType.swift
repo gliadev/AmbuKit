@@ -6,3 +6,8 @@
 //
 
 import Foundation
+
+
+public enum KitType: String, Codable, CaseIterable, Identifiable {
+    case SVB, SVAe, SVA, custom; public var id: String { rawValue }
+}

@@ -6,3 +6,9 @@
 //
 
 import Foundation
+
+public enum RoleKind: String, Codable, CaseIterable, Identifiable {
+    case programmer, logistics, sanitary
+    public var id: String { rawValue }
+}
+

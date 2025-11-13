@@ -6,3 +6,5 @@
 //
 
 import Foundation
+
+public enum ActionKind: String, Codable, CaseIterable { case create, read, update, delete }

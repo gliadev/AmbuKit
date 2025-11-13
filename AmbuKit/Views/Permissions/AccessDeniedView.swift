@@ -8,10 +8,24 @@
 import SwiftUI
 
 struct AccessDeniedView: View {
+    let message: String
+    init(_ message: String = "No tienes permisos para acceder a esta sección.") {
+        self.message = message
+    }
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        VStack(spacing: 12) {
+            Image(systemName: "lock.fill").font(.largeTitle)
+            Text(message).multilineTextAlignment(.center)
+            Text("Si crees que es un error, contacta con Logística o Programación.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
     }
 }
+
+
+
 
 #Preview {
     AccessDeniedView()

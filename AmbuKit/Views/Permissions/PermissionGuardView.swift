@@ -7,12 +7,28 @@
 
 import SwiftUI
 
-struct PermissionGuardView: View {
+struct PermissionGuardView<Content: View>: View {
+    let canAccess: Bool
+    let denialMessage: String
+    @ViewBuilder var content: () -> Content
+
+    init(canAccess: Bool,
+         denialMessage: String = "No tienes permisos para acceder a esta sección.",
+         @ViewBuilder content: @escaping () -> Content) {
+        self.canAccess = canAccess
+        self.denialMessage = denialMessage
+        self.content = content
+    }
+
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        if canAccess { content() } else { AccessDeniedView(denialMessage) }
     }
 }
 
-#Preview {
-    PermissionGuardView()
+extension View {
+    
+    @ViewBuilder func visibleWhen(_ condition: Bool) -> some View {
+        if condition { self }
+    }
 }
+
