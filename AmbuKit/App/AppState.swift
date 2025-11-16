@@ -2,198 +2,275 @@
 //  AppState.swift
 //  AmbuKit
 //
-//  Created by Adolfo on 12/11/25.
+//  Created by Claude on 16/11/25.
 //
 
 import Foundation
 import SwiftUI
 import Combine
-import FirebaseAuth
-import FirebaseFirestore
 
 /// Estado global de la aplicación
-/// Gestiona el usuario autenticado y su información de Firestore
+/// Maneja autenticación, navegación y estado de usuario
+///
+/// **Responsabilidades:**
+/// - Gestionar estado de autenticación
+/// - Coordinar FirebaseAuthService y UserSession
+/// - Proporcionar interfaz unificada para las vistas
+/// - Manejar errores y estados de carga
+///
+/// **Uso:**
+/// ```swift
+/// @EnvironmentObject private var appState: AppState
+///
+/// // Login
+/// await appState.signIn(email: email, password: password)
+///
+/// // Logout
+/// await appState.signOut()
+/// ```
 @MainActor
 final class AppState: ObservableObject {
     
     // MARK: - Singleton
+    
     static let shared = AppState()
+    
+    // MARK: - Services
+    
+    private let authService = FirebaseAuthService.shared
+    private let userSession = UserSession.shared
     
     // MARK: - Published Properties
     
-    /// Usuario actual cargado desde Firestore (con rol y base)
+    /// Usuario actual autenticado
     @Published private(set) var currentUser: UserFS?
     
-    /// Indica si hay una sesión activa
+    /// Indica si hay un usuario autenticado
     @Published private(set) var isAuthenticated = false
     
     /// Indica si se está cargando información del usuario
     @Published private(set) var isLoadingUser = false
     
-    /// Error actual (si lo hay)
-    @Published var currentError: AppError?
+    /// Error actual
+    @Published private(set) var currentError: AuthError?
     
     // MARK: - Private Properties
     
-    private let authService = FirebaseAuthService.shared
-    private let db = Firestore.firestore()
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
     private init() {
-        // Observar cambios en el estado de autenticación
-        Task {
-            await observeAuthState()
-        }
+        setupBindings()
+        print("🌐 AppState inicializado")
     }
     
-    // MARK: - Auth State Observer
+    // MARK: - Setup
     
-    /// Observar cambios en el estado de autenticación
-    private func observeAuthState() async {
-        // Cuando cambia el estado de auth, cargar el usuario de Firestore
-        for await isAuth in authService.$isAuthenticated.values {
-            self.isAuthenticated = isAuth
-            
-            if isAuth, let uid = authService.currentAuthUser?.uid {
-                await loadCurrentUser(uid: uid)
-            } else {
-                self.currentUser = nil
-            }
-        }
+    /// Configura los bindings con los servicios
+    private func setupBindings() {
+        // Observar usuario actual desde AuthService
+        authService.$currentUser
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$currentUser)
+        
+        // Observar estado de autenticación
+        authService.$currentUser
+            .receive(on: DispatchQueue.main)
+            .map { $0 != nil }
+            .assign(to: &$isAuthenticated)
+        
+        // Observar estado de carga
+        authService.$isLoading
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isLoadingUser)
+        
+        // Observar errores
+        authService.$currentError
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$currentError)
     }
     
-    // MARK: - Sign In
+    // MARK: - Public Methods - Authentication
     
-    /// Iniciar sesión y cargar usuario de Firestore
+    /// Inicia sesión con email y contraseña
+    /// - Parameters:
+    ///   - email: Email del usuario
+    ///   - password: Contraseña
     func signIn(email: String, password: String) async {
-        isLoadingUser = true
-        currentError = nil
-        
         do {
-            let uid = try await authService.signIn(email: email, password: password)
-            await loadCurrentUser(uid: uid)
+            let user = try await authService.signIn(email: email, password: password)
+            print("✅ AppState: Login exitoso para @\(user.username)")
         } catch let error as AuthError {
-            currentError = .auth(error)
+            print("❌ AppState: Error de login - \(error.errorDescription ?? "Unknown")")
+            // El error ya está publicado en authService.$currentError
         } catch {
-            currentError = .unknown(error.localizedDescription)
+            print("❌ AppState: Error inesperado - \(error.localizedDescription)")
         }
-        
-        isLoadingUser = false
     }
     
-    // MARK: - Sign Out
-    
-    /// Cerrar sesión
+    /// Cierra la sesión del usuario actual
     func signOut() async {
-        currentError = nil
-        
         do {
             try await authService.signOut()
-            currentUser = nil
+            print("✅ AppState: Logout exitoso")
+        } catch let error as AuthError {
+            print("❌ AppState: Error de logout - \(error.errorDescription ?? "Unknown")")
+            // El error ya está publicado en authService.$currentError
         } catch {
-            currentError = .signOutFailed
+            print("❌ AppState: Error inesperado - \(error.localizedDescription)")
         }
     }
     
-    // MARK: - Load User
+    /// Recarga los datos del usuario actual
+    func reloadUser() async {
+        await authService.reloadUserData()
+    }
     
-    /// Cargar usuario completo desde Firestore (con rol y base)
-    private func loadCurrentUser(uid: String) async {
-        isLoadingUser = true
+    // MARK: - Public Methods - Error Handling
+    
+    /// Limpia el error actual
+    func clearError() {
         currentError = nil
-        
-        do {
-            // 1. Buscar usuario por UID
-            let snapshot = try await db.collection(UserFS.collectionName)
-                .whereField("uid", isEqualTo: uid)
-                .limit(to: 1)
-                .getDocuments()
-            
-            guard let document = snapshot.documents.first else {
-                currentError = .userNotFoundInFirestore
-                isLoadingUser = false
-                return
-            }
-            
-            // 2. Decodificar usuario
-            var user = try document.data(as: UserFS.self)
-            
-            // 3. Cargar rol si existe
-            if let roleId = user.roleId {
-                user.role = try await loadRole(id: roleId)
-            }
-            
-            // 4. Cargar base si existe
-            if let baseId = user.baseId {
-                user.base = try await loadBase(id: baseId)
-            }
-            
-            // 5. Actualizar estado
-            self.currentUser = user
-            
-        } catch {
-            currentError = .loadUserFailed(error.localizedDescription)
-        }
-        
-        isLoadingUser = false
+        authService.clearError()
     }
     
-    // MARK: - Load Related Data
-    
-    /// Cargar rol desde Firestore
-    private func loadRole(id: String) async throws -> RoleFS? {
-        let document = try await db.collection(RoleFS.collectionName)
-            .document(id)
-            .getDocument()
-        
-        return try document.data(as: RoleFS.self)
+    /// Establece un error manualmente
+    func setError(_ error: AuthError) {
+        currentError = error
     }
     
-    /// Cargar base desde Firestore
-    private func loadBase(id: String) async throws -> BaseFS? {
-        let document = try await db.collection(BaseFS.collectionName)
-            .document(id)
-            .getDocument()
-        
-        return try document.data(as: BaseFS.self)
+    // MARK: - Convenience Getters
+    
+    /// UID del usuario actual en Firebase Auth
+    var currentUID: String? {
+        authService.currentUID
     }
     
-    // MARK: - Refresh User
+    /// Username del usuario actual
+    var currentUsername: String? {
+        currentUser?.username
+    }
     
-    /// Recargar información del usuario actual
-    func refreshCurrentUser() async {
-        guard let uid = authService.currentAuthUser?.uid else {
-            currentUser = nil
-            return
-        }
-        
-        await loadCurrentUser(uid: uid)
+    /// Email del usuario actual
+    var currentEmail: String? {
+        currentUser?.email
+    }
+    
+    /// Nombre completo del usuario actual
+    var currentFullName: String? {
+        currentUser?.fullName
+    }
+    
+    /// Indica si el usuario actual está activo
+    var isUserActive: Bool {
+        currentUser?.active ?? false
     }
 }
 
-// MARK: - App Errors
+// MARK: - Role & Permissions Helpers
 
-/// Errores de la aplicación
-enum AppError: LocalizedError, Equatable {
-    case auth(AuthError)
-    case userNotFoundInFirestore
-    case loadUserFailed(String)
-    case signOutFailed
-    case unknown(String)
+extension AppState {
+    /// Obtiene el tipo de rol del usuario actual
+    func getCurrentRoleKind() async -> RoleKind? {
+        guard let roleId = currentUser?.roleId else { return nil }
+        let role = await PolicyService.shared.getRole(id: roleId)
+        return role?.kind
+    }
     
-    var errorDescription: String? {
-        switch self {
-        case .auth(let authError):
-            return authError.errorDescription
-        case .userNotFoundInFirestore:
-            return "Usuario no encontrado en la base de datos"
-        case .loadUserFailed(let message):
-            return "Error al cargar usuario: \(message)"
-        case .signOutFailed:
-            return "Error al cerrar sesión"
-        case .unknown(let message):
-            return message
-        }
+    /// Verifica si el usuario actual es programador
+    func isProgrammer() async -> Bool {
+        await AuthorizationServiceFS.isProgrammer(currentUser)
+    }
+    
+    /// Verifica si el usuario actual es logística
+    func isLogistics() async -> Bool {
+        await AuthorizationServiceFS.isLogistics(currentUser)
+    }
+    
+    /// Verifica si el usuario actual es sanitario
+    func isSanitary() async -> Bool {
+        await AuthorizationServiceFS.isSanitary(currentUser)
+    }
+    
+    /// Verifica si el usuario puede realizar una acción
+    func can(_ action: ActionKind, on entity: EntityKind) async -> Bool {
+        await AuthorizationServiceFS.allowed(action, on: entity, for: currentUser)
     }
 }
+
+// MARK: - Navigation State (Opcional - para futuro)
+
+extension AppState {
+    /// Ruta de navegación actual (para deep linking futuro)
+    enum Route: Equatable {
+        case splash
+        case login
+        case main
+        case profile
+        case admin
+        case inventory
+    }
+    
+    // Podrías agregar:
+    // @Published var currentRoute: Route = .splash
+    // Y manejar navegación programática
+}
+
+// MARK: - Debug Helpers
+
+#if DEBUG
+extension AppState {
+    /// Imprime el estado actual de la app (solo debug)
+    func printStatus() {
+        print("\n🌐 AppState Status:")
+        print("   Is Authenticated: \(isAuthenticated)")
+        print("   Is Loading User: \(isLoadingUser)")
+        print("   Current User: \(currentUsername ?? "nil")")
+        print("   Current Email: \(currentEmail ?? "nil")")
+        print("   Current Error: \(currentError?.errorDescription ?? "nil")")
+        print("   User Active: \(isUserActive)")
+        print()
+    }
+    
+    /// Simula un login para testing (solo debug)
+    func simulateLogin(username: String = "test_user") {
+        // Solo para testing en previews
+        let testUser = UserFS(
+            id: "test_id",
+            uid: "test_uid",
+            username: username,
+            fullName: "Test User",
+            email: "test@test.com",
+            active: true,
+            roleId: nil,
+            baseId: nil
+        )
+        
+        // Esto solo funciona en debug
+        // En producción, siempre usar signIn()
+        currentUser = testUser
+        print("⚠️ DEBUG: Usuario simulado: @\(username)")
+    }
+}
+#endif
+
+// MARK: - Preview Support
+
+#if DEBUG
+extension AppState {
+    /// Crea una instancia para previews
+    static var preview: AppState {
+        let state = AppState.shared
+        // Podrías configurar datos de prueba aquí
+        return state
+    }
+    
+    /// Crea una instancia para previews con usuario autenticado
+    static func previewAuthenticated(username: String = "preview_user") -> AppState {
+        let state = AppState.shared
+        state.simulateLogin(username: username)
+        return state
+    }
+}
+#endif
