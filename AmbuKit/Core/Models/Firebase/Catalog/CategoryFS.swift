@@ -7,38 +7,39 @@
 
 import Foundation
 import FirebaseFirestore
+import Combine
 
 /// Modelo Firebase para Categorías de productos
 /// Representa una categoría de items del catálogo (Farmacia, Curas, Trauma, etc.)
-struct CategoryFS: Codable, Identifiable {
+public struct CategoryFS: Codable, Identifiable {
     // MARK: - Firestore Properties
     
     /// ID único en Firestore (auto-generado)
-    @DocumentID var id: String?
+@DocumentID public var id: String?
     
     // MARK: - Data Properties
     
     /// Código único de la categoría (ej: "FARM", "CURAS")
-    var code: String
+    public var code: String
     
     /// Nombre descriptivo de la categoría (ej: "Farmacia", "Material de Curas")
-    var name: String
+    public var name: String
     
     /// Icono SF Symbol opcional para UI (ej: "cross.case.fill", "bandage.fill")
-    var icon: String?
+    public var icon: String?
     
     // MARK: - Timestamps
     
     /// Fecha de creación del registro
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Coding Keys
     
     /// Mapeo de propiedades a nombres de campos en Firestore
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case code
         case name
@@ -57,7 +58,7 @@ struct CategoryFS: Codable, Identifiable {
     ///   - icon: Icono SF Symbol opcional
     ///   - createdAt: Fecha de creación (default: ahora)
     ///   - updatedAt: Fecha de actualización (default: ahora)
-    init(
+    public init(
         id: String? = nil,
         code: String,
         name: String,
@@ -76,7 +77,7 @@ struct CategoryFS: Codable, Identifiable {
 
 // MARK: - Computed Properties
 
-extension CategoryFS {
+public extension CategoryFS {
     /// Indica si la categoría tiene un icono asignado
     var hasIcon: Bool {
         icon != nil && !(icon?.isEmpty ?? true)
@@ -90,7 +91,7 @@ extension CategoryFS {
 
 // MARK: - Helper Methods
 
-extension CategoryFS {
+public extension CategoryFS {
     /// Crea una copia actualizada de la categoría
     /// - Parameter updates: Closure para modificar propiedades
     /// - Returns: Nueva instancia con cambios aplicados
@@ -104,7 +105,7 @@ extension CategoryFS {
 
 // MARK: - Firestore Collection
 
-extension CategoryFS {
+public extension CategoryFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "categories"
 }
@@ -112,7 +113,7 @@ extension CategoryFS {
 // MARK: - Sample Data (para previews y testing)
 
 #if DEBUG
-extension CategoryFS {
+public extension CategoryFS {
     /// Categoría de ejemplo para Farmacia
     static let samplePharmacy = CategoryFS(
         id: "cat_pharmacy",
@@ -145,9 +146,4 @@ extension CategoryFS {
     ]
 }
 #endif
-
-
-
-
-
 

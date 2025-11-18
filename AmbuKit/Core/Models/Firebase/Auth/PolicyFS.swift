@@ -7,7 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
-
+import Combine
 
 
 /// Modelo de política de permisos para Firestore
@@ -15,52 +15,52 @@ import FirebaseFirestore
 /// Equivalente a Policy.swift de SwiftData pero adaptado a Firebase
 
 
-struct PolicyFS: Codable, Identifiable, Equatable {
+public struct PolicyFS: Codable, Identifiable, Equatable {
     // MARK: - Properties
         
         /// ID del documento en Firestore (generado automáticamente)
-        @DocumentID var id: String?
+        @DocumentID public var id: String?
         
         /// Entidad a la que aplica la política (almacenado como String)
-        var entityRaw: String
+        public var entityRaw: String
         
         /// Permiso para crear (CREATE)
-        var canCreate: Bool
+        public var canCreate: Bool
         
         /// Permiso para leer (READ)
-        var canRead: Bool
+        public var canRead: Bool
         
         /// Permiso para actualizar (UPDATE)
-        var canUpdate: Bool
+        public var canUpdate: Bool
         
         /// Permiso para eliminar (DELETE)
-        var canDelete: Bool
+        public var canDelete: Bool
         
         /// ID del rol al que pertenece esta política (referencia a RoleFS)
-        var roleId: String?
+        public var roleId: String?
         
         /// Fecha de creación
-        var createdAt: Date
+        public var createdAt: Date
         
         /// Fecha de última actualización
-        var updatedAt: Date
+        public var updatedAt: Date
         
         // MARK: - Computed Properties
         
         /// Entidad de tipo enum (derivado de entityRaw)
         /// Este campo NO se guarda en Firestore
-        var entity: EntityKind {
+        public var entity: EntityKind {
             get { EntityKind(rawValue: entityRaw) ?? .kit }
             set { entityRaw = newValue.rawValue }
         }
         
         /// Rol cargado (debe obtenerse de Firestore)
         /// Este campo NO se guarda en Firestore
-        var role: RoleFS? = nil
+        public var role: RoleFS? = nil
         
         // MARK: - Coding Keys
         
-        enum CodingKeys: String, CodingKey {
+        public enum CodingKeys: String, CodingKey {
             case id
             case entityRaw
             case canCreate
@@ -75,7 +75,7 @@ struct PolicyFS: Codable, Identifiable, Equatable {
         
         // MARK: - Initialization
         
-        init(
+        public init(
             id: String? = nil,
             entity: EntityKind,
             canCreate: Bool,
@@ -100,14 +100,14 @@ struct PolicyFS: Codable, Identifiable, Equatable {
 
     // MARK: - Firestore Collection
 
-    extension PolicyFS {
+    public extension PolicyFS {
         /// Nombre de la colección en Firestore
         static let collectionName = "policies"
     }
 
     // MARK: - Helpers
 
-    extension PolicyFS {
+    public extension PolicyFS {
         /// Crear PolicyFS desde snapshot de Firestore
         static func from(snapshot: DocumentSnapshot) throws -> PolicyFS? {
             try snapshot.data(as: PolicyFS.self)
@@ -122,7 +122,7 @@ struct PolicyFS: Codable, Identifiable, Equatable {
 
     // MARK: - Business Logic Helpers
 
-    extension PolicyFS {
+    public extension PolicyFS {
         /// Verifica si tiene permiso para una acción específica
         func hasPermission(for action: ActionKind) -> Bool {
             switch action {

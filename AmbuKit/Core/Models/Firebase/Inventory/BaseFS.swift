@@ -11,45 +11,45 @@ import FirebaseFirestore
 
 /// Modelo de base/estación para Firestore
 /// Representa una base o sede donde se ubican vehículos/ambulancias
-struct BaseFS: Codable, Identifiable, Equatable {
+public struct BaseFS: Codable, Identifiable, Equatable {
     
     // MARK: - Firestore Properties
     
     /// ID único en Firestore (auto-generado)
-    @DocumentID var id: String?
+    @DocumentID public var id: String?
     
     // MARK: - Data Properties
     
     /// Código único de la base (ej: "2401", "2402", "2333")
-    var code: String
+    public var code: String
     
     /// Nombre descriptivo de la base (ej: "Bilbao 1", "Trapaga")
-    var name: String
+    public var name: String
     
     /// Ubicación o dirección de la base (opcional)
-    var address: String?
+    public var address: String?
     
     /// Indica si la base está activa
-    var active: Bool
+    public var active: Bool
     
     // MARK: - Relationships (por IDs)
     
     /// IDs de los vehículos asignados a esta base
     /// Array vacío si no hay vehículos asignados
-    var vehicleIds: [String]
+    public var vehicleIds: [String]
     
     // MARK: - Timestamps
     
     /// Fecha de creación del registro
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Coding Keys
     
     /// Mapeo de propiedades a nombres de campos en Firestore
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case code
         case name
@@ -72,7 +72,7 @@ struct BaseFS: Codable, Identifiable, Equatable {
     ///   - vehicleIds: IDs de vehículos asignados (default: array vacío)
     ///   - createdAt: Fecha de creación (default: ahora)
     ///   - updatedAt: Fecha de actualización (default: ahora)
-    init(
+    public init(
         id: String? = nil,
         code: String,
         name: String,
@@ -95,7 +95,7 @@ struct BaseFS: Codable, Identifiable, Equatable {
 
 // MARK: - Computed Properties
 
-extension BaseFS {
+public extension BaseFS {
     /// Indica si tiene dirección definida
     var hasAddress: Bool {
         address != nil && !(address?.isEmpty ?? true)
@@ -126,7 +126,7 @@ extension BaseFS {
 
 // MARK: - Vehicle Management
 
-extension BaseFS {
+public extension BaseFS {
     /// Añade un vehículo a la base
     /// - Parameter vehicleId: ID del vehículo a añadir
     /// - Returns: Nueva instancia con el vehículo añadido
@@ -159,7 +159,7 @@ extension BaseFS {
 
 // MARK: - Helper Methods
 
-extension BaseFS {
+public extension BaseFS {
     /// Crea una copia actualizada de la base
     /// - Parameter updates: Closure para modificar propiedades
     /// - Returns: Nueva instancia con cambios aplicados
@@ -173,15 +173,30 @@ extension BaseFS {
 
 // MARK: - Firestore Collection
 
-extension BaseFS {
+public extension BaseFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "bases"
+}
+
+// MARK: - Firestore Helpers
+
+public extension BaseFS {
+    /// Crear BaseFS desde snapshot de Firestore
+    static func from(snapshot: DocumentSnapshot) throws -> BaseFS? {
+        try snapshot.data(as: BaseFS.self)
+    }
+    
+    /// Convertir a diccionario para Firestore
+    func toDictionary() throws -> [String: Any] {
+        let encoder = Firestore.Encoder()
+        return try encoder.encode(self)
+    }
 }
 
 // MARK: - Sample Data (para previews y testing)
 
 #if DEBUG
-extension BaseFS {
+public extension BaseFS {
     /// Base de ejemplo: Bilbao 1
     static let sampleBilbao1 = BaseFS(
         id: "base_bilbao1",
@@ -220,15 +235,3 @@ extension BaseFS {
     ]
 }
 #endif
-
-
-
-
-
-
-
-
-
-
-
-

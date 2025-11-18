@@ -10,52 +10,52 @@ import FirebaseFirestore
 
 /// Modelo Firebase para Items de Kit
 /// Representa un item específico dentro de un kit con su cantidad, umbrales y metadata
-struct KitItemFS: Codable, Identifiable {
+public struct KitItemFS: Codable, Identifiable {
     // MARK: - Firestore Properties
     
     /// ID único en Firestore (auto-generado)
-    @DocumentID var id: String?
+@DocumentID public var id: String?
     
     // MARK: - Data Properties
     
     /// Cantidad actual del item en el kit
-    var quantity: Double
+    public var quantity: Double
     
     /// Cantidad mínima requerida (umbral de alerta)
-    var min: Double
+    public var min: Double
     
     /// Cantidad máxima recomendada (opcional)
-    var max: Double?
+    public var max: Double?
     
     /// Fecha de caducidad del item (opcional)
-    var expiry: Date?
+    public var expiry: Date?
     
     /// Número de lote (opcional)
-    var lot: String?
+    public var lot: String?
     
     /// Notas adicionales sobre el item (opcional)
-    var notes: String?
+    public var notes: String?
     
     // MARK: - Relationships (por IDs)
     
     /// ID del item del catálogo (referencia a CatalogItemFS)
-    var catalogItemId: String?
+    public var catalogItemId: String?
     
     /// ID del kit al que pertenece (referencia a KitFS)
-    var kitId: String?
+    public var kitId: String?
     
     // MARK: - Timestamps
     
     /// Fecha de creación del registro
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Coding Keys
     
     /// Mapeo de propiedades a nombres de campos en Firestore
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case quantity
         case min
@@ -84,7 +84,7 @@ struct KitItemFS: Codable, Identifiable {
     ///   - kitId: ID del kit al que pertenece (opcional)
     ///   - createdAt: Fecha de creación (default: ahora)
     ///   - updatedAt: Fecha de actualización (default: ahora)
-    init(
+    public init(
         id: String? = nil,
         quantity: Double,
         min: Double,
@@ -113,7 +113,7 @@ struct KitItemFS: Codable, Identifiable {
 
 // MARK: - Computed Properties
 
-extension KitItemFS {
+public extension KitItemFS {
     /// Indica si tiene cantidad máxima definida
     var hasMaxThreshold: Bool {
         max != nil
@@ -209,7 +209,7 @@ extension KitItemFS {
 
 // MARK: - Stock Status
 
-extension KitItemFS {
+public extension KitItemFS {
     /// Estados posibles del stock
     enum StockStatus: String {
         case low = "bajo"
@@ -244,7 +244,7 @@ extension KitItemFS {
 
 // MARK: - Quantity Management
 
-extension KitItemFS {
+public extension KitItemFS {
     /// Actualiza la cantidad del item
     /// - Parameter newQuantity: Nueva cantidad
     /// - Returns: Nueva instancia con la cantidad actualizada
@@ -272,7 +272,7 @@ extension KitItemFS {
 
 // MARK: - Threshold Management
 
-extension KitItemFS {
+public extension KitItemFS {
     /// Actualiza los umbrales del item
     /// - Parameters:
     ///   - min: Nuevo mínimo
@@ -289,7 +289,7 @@ extension KitItemFS {
 
 // MARK: - Expiry Management
 
-extension KitItemFS {
+public extension KitItemFS {
     /// Actualiza la fecha de caducidad y el lote
     /// - Parameters:
     ///   - expiry: Nueva fecha de caducidad
@@ -308,7 +308,7 @@ extension KitItemFS {
 
 // MARK: - Helper Methods
 
-extension KitItemFS {
+public extension KitItemFS {
     /// Crea una copia actualizada del item
     /// - Parameter updates: Closure para modificar propiedades
     /// - Returns: Nueva instancia con cambios aplicados
@@ -322,7 +322,7 @@ extension KitItemFS {
 
 // MARK: - Firestore Collection
 
-extension KitItemFS {
+public extension KitItemFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "kitItems"
 }
@@ -330,7 +330,7 @@ extension KitItemFS {
 // MARK: - Sample Data (para previews y testing)
 
 #if DEBUG
-extension KitItemFS {
+public extension KitItemFS {
     /// Item de ejemplo: Adrenalina con stock OK
     static let sampleAdrenalineOK = KitItemFS(
         id: "kititem_adre_1",

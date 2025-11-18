@@ -10,50 +10,50 @@ import FirebaseFirestore
 
 /// Modelo Firebase para Kits
 /// Representa un botiquín o kit de emergencias con su inventario
-struct KitFS: Codable, Identifiable {
+public struct KitFS: Codable, Identifiable {
     // MARK: - Firestore Properties
     
     /// ID único en Firestore (auto-generado)
-    @DocumentID var id: String?
+@DocumentID public var id: String?
     
     // MARK: - Data Properties
     
     /// Código único del kit (ej: "KIT-001", "AMPULARIO-SVA")
-    var code: String
+    public var code: String
     
     /// Nombre descriptivo del kit (ej: "Kit Principal SVA", "Ampulario")
-    var name: String
+    public var name: String
     
     /// Tipo de kit (enum compartido con SwiftData)
-    var type: KitType
+    public var type: KitType
     
     /// Estado del kit (ej: "ok", "revision", "mantenimiento")
-    var status: String
+    public var status: String
     
     /// Fecha de última auditoría/revisión (opcional)
-    var lastAudit: Date?
+    public var lastAudit: Date?
     
     // MARK: - Relationships (por IDs)
     
     /// ID del vehículo al que está asignado (referencia a VehicleFS)
-    var vehicleId: String?
+    public var vehicleId: String?
     
     /// IDs de los items que contiene el kit
     /// Array vacío si no tiene items
-    var itemIds: [String]
+    public var itemIds: [String]
     
     // MARK: - Timestamps
     
     /// Fecha de creación del registro
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Coding Keys
     
     /// Mapeo de propiedades a nombres de campos en Firestore
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case code
         case name
@@ -80,7 +80,7 @@ struct KitFS: Codable, Identifiable {
     ///   - itemIds: IDs de items contenidos (default: array vacío)
     ///   - createdAt: Fecha de creación (default: ahora)
     ///   - updatedAt: Fecha de actualización (default: ahora)
-    init(
+    public init(
         id: String? = nil,
         code: String,
         name: String,
@@ -107,7 +107,7 @@ struct KitFS: Codable, Identifiable {
 
 // MARK: - Computed Properties
 
-extension KitFS {
+public extension KitFS {
     /// Indica si está asignado a un vehículo
     var isAssigned: Bool {
         vehicleId != nil && !(vehicleId?.isEmpty ?? true)
@@ -207,7 +207,7 @@ extension KitFS {
 
 // MARK: - Item Management
 
-extension KitFS {
+public extension KitFS {
     /// Añade un item al kit
     /// - Parameter itemId: ID del item a añadir
     /// - Returns: Nueva instancia con el item añadido
@@ -240,9 +240,9 @@ extension KitFS {
 
 // MARK: - Status Management
 
-extension KitFS {
+public extension KitFS {
     /// Estados válidos para un kit
-    enum Status: String, CaseIterable {
+     enum Status: String, CaseIterable {
         case ok = "ok"
         case revision = "revision"
         case maintenance = "mantenimiento"
@@ -285,7 +285,7 @@ extension KitFS {
 
 // MARK: - Audit Management
 
-extension KitFS {
+public extension KitFS {
     /// Marca el kit como auditado ahora
     /// - Returns: Nueva instancia con fecha de auditoría actualizada
     func markAsAudited() -> KitFS {
@@ -298,7 +298,7 @@ extension KitFS {
 
 // MARK: - Vehicle Assignment
 
-extension KitFS {
+public extension KitFS {
     /// Asigna el kit a un vehículo
     /// - Parameter vehicleId: ID del vehículo (nil para desasignar)
     /// - Returns: Nueva instancia con el vehículo asignado
@@ -312,7 +312,7 @@ extension KitFS {
 
 // MARK: - Helper Methods
 
-extension KitFS {
+public extension KitFS {
     /// Crea una copia actualizada del kit
     /// - Parameter updates: Closure para modificar propiedades
     /// - Returns: Nueva instancia con cambios aplicados
@@ -326,7 +326,7 @@ extension KitFS {
 
 // MARK: - Firestore Collection
 
-extension KitFS {
+public extension KitFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "kits"
 }
@@ -334,7 +334,7 @@ extension KitFS {
 // MARK: - Sample Data (para previews y testing)
 
 #if DEBUG
-extension KitFS {
+public extension KitFS {
     /// Kit de ejemplo: Ampulario SVA
     static let sampleAmpulario = KitFS(
         id: "kit_ampulario",

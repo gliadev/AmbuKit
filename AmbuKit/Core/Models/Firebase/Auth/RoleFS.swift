@@ -5,25 +5,28 @@
 //  Created by Adolfo on 12/11/25.
 //
 
+
+
 import Foundation
 import FirebaseFirestore
+import Combine
 
 /// Modelo de rol para Firestore
-struct RoleFS: Codable, Identifiable, Equatable {
+public struct RoleFS: Codable, Identifiable, Equatable {
     
-    @DocumentID var id: String?
-    var kindRaw: String
-    var displayName: String
-    var createdAt: Date
-    var updatedAt: Date
+    @DocumentID public var id: String?
+    public var kindRaw: String
+    public var displayName: String
+    public var createdAt: Date
+    public var updatedAt: Date
     
     // Computed property para acceder al enum RoleKind
-    var kind: RoleKind {
+    public var kind: RoleKind {
         get { RoleKind(rawValue: kindRaw) ?? .sanitary }
         set { kindRaw = newValue.rawValue }
     }
     
-    init(
+    public init(
         id: String? = nil,
         kind: RoleKind,
         displayName: String,
@@ -37,5 +40,146 @@ struct RoleFS: Codable, Identifiable, Equatable {
         self.updatedAt = updatedAt
     }
     
-    static let collectionName = "roles"
+    public static let collectionName = "roles"
 }
+
+// MARK: - Helpers
+
+public extension RoleFS {
+    /// Crear RoleFS desde snapshot de Firestore
+    static func from(snapshot: DocumentSnapshot) throws -> RoleFS? {
+        try snapshot.data(as: RoleFS.self)
+    }
+    
+    /// Convertir a diccionario para Firestore
+    func toDictionary() throws -> [String: Any] {
+        let encoder = Firestore.Encoder()
+        return try encoder.encode(self)
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

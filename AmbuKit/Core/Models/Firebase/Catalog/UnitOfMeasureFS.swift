@@ -7,35 +7,36 @@
 
 import Foundation
 import FirebaseFirestore
+import Combine
 
 /// Modelo Firebase para Unidades de Medida
 /// Representa las unidades en que se miden los items (unidad, ml, mg, etc.)
-struct UnitOfMeasureFS: Codable, Identifiable {
+public struct UnitOfMeasureFS: Codable, Identifiable {
     // MARK: - Firestore Properties
     
     /// ID único en Firestore (auto-generado)
-    @DocumentID var id: String?
+@DocumentID public var id: String?
     
     // MARK: - Data Properties
     
     /// Símbolo de la unidad (ej: "u", "ml", "mg", "L")
-    var symbol: String
+    public var symbol: String
     
     /// Nombre completo de la unidad (ej: "unidad", "mililitro", "miligramo")
-    var name: String
+    public var name: String
     
     // MARK: - Timestamps
     
     /// Fecha de creación del registro
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Coding Keys
     
     /// Mapeo de propiedades a nombres de campos en Firestore
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case symbol
         case name
@@ -52,7 +53,7 @@ struct UnitOfMeasureFS: Codable, Identifiable {
     ///   - name: Nombre completo de la unidad
     ///   - createdAt: Fecha de creación (default: ahora)
     ///   - updatedAt: Fecha de actualización (default: ahora)
-    init(
+    public init(
         id: String? = nil,
         symbol: String,
         name: String,
@@ -69,7 +70,7 @@ struct UnitOfMeasureFS: Codable, Identifiable {
 
 // MARK: - Computed Properties
 
-extension UnitOfMeasureFS {
+public extension UnitOfMeasureFS {
     /// Texto para mostrar en UI (símbolo preferentemente)
     var displayText: String {
         symbol
@@ -83,7 +84,7 @@ extension UnitOfMeasureFS {
 
 // MARK: - Helper Methods
 
-extension UnitOfMeasureFS {
+public extension UnitOfMeasureFS {
     /// Crea una copia actualizada de la unidad
     /// - Parameter updates: Closure para modificar propiedades
     /// - Returns: Nueva instancia con cambios aplicados
@@ -97,14 +98,14 @@ extension UnitOfMeasureFS {
 
 // MARK: - Firestore Collection
 
-extension UnitOfMeasureFS {
+public extension UnitOfMeasureFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "unitOfMeasures"
 }
 
 // MARK: - Common Units
 
-extension UnitOfMeasureFS {
+public extension UnitOfMeasureFS {
     /// Unidades de medida más comunes en emergencias médicas
     enum CommonUnit: String {
         case unit = "u"
@@ -130,7 +131,7 @@ extension UnitOfMeasureFS {
 // MARK: - Sample Data (para previews y testing)
 
 #if DEBUG
-extension UnitOfMeasureFS {
+public extension UnitOfMeasureFS {
     /// Unidad de ejemplo: unidad
     static let sampleUnit = UnitOfMeasureFS(
         id: "uom_unit",
@@ -160,6 +161,3 @@ extension UnitOfMeasureFS {
     ]
 }
 #endif
-
-
-

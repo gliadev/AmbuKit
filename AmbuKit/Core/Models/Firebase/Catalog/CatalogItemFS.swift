@@ -7,55 +7,55 @@
 
 import Foundation
 import FirebaseFirestore
-
+import Combine
 /// Modelo Firebase para Items del Catálogo
 /// Representa un producto/material disponible en el sistema (medicamentos, material sanitario, etc.)
-struct CatalogItemFS: Codable, Identifiable {
+public struct CatalogItemFS: Codable, Identifiable {
     // MARK: - Firestore Properties
     
     /// ID único en Firestore (auto-generado)
-    @DocumentID var id: String?
+@DocumentID public var id: String?
     
     // MARK: - Data Properties
     
     /// Código único del item (ej: "ADRE1MG", "MIDA5MG")
-    var code: String
+    public var code: String
     
     /// Nombre del producto (ej: "Adrenalina 1mg", "Midazolam 5mg")
-    var name: String
+    public var name: String
     
     /// Descripción detallada del producto (opcional)
-    var itemDescription: String?
+    public var itemDescription: String?
     
     /// Indica si es un item crítico (requiere atención especial)
-    var critical: Bool
+    public var critical: Bool
     
     /// Stock mínimo recomendado (opcional)
-    var minStock: Double?
+    public var minStock: Double?
     
     /// Stock máximo recomendado (opcional)
-    var maxStock: Double?
+    public var maxStock: Double?
     
     // MARK: - Relationships (por IDs)
     
     /// ID de la categoría a la que pertenece (referencia a CategoryFS)
-    var categoryId: String?
+    public var categoryId: String?
     
     /// ID de la unidad de medida (referencia a UnitOfMeasureFS)
-    var uomId: String?
+    public var uomId: String?
     
     // MARK: - Timestamps
     
     /// Fecha de creación del registro
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Coding Keys
     
     /// Mapeo de propiedades a nombres de campos en Firestore
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case code
         case name
@@ -84,7 +84,7 @@ struct CatalogItemFS: Codable, Identifiable {
     ///   - uomId: ID de la unidad de medida (opcional)
     ///   - createdAt: Fecha de creación (default: ahora)
     ///   - updatedAt: Fecha de actualización (default: ahora)
-    init(
+    public init(
         id: String? = nil,
         code: String,
         name: String,
@@ -113,7 +113,7 @@ struct CatalogItemFS: Codable, Identifiable {
 
 // MARK: - Computed Properties
 
-extension CatalogItemFS {
+public extension CatalogItemFS {
     /// Indica si tiene descripción
     var hasDescription: Bool {
         itemDescription != nil && !(itemDescription?.isEmpty ?? true)
@@ -142,7 +142,7 @@ extension CatalogItemFS {
 
 // MARK: - Stock Validation
 
-extension CatalogItemFS {
+public extension CatalogItemFS {
     /// Valida si una cantidad está dentro del rango recomendado
     /// - Parameter quantity: Cantidad a validar
     /// - Returns: Estado del stock (low, ok, high)
@@ -182,7 +182,7 @@ extension CatalogItemFS {
 
 // MARK: - Helper Methods
 
-extension CatalogItemFS {
+public extension CatalogItemFS {
     /// Crea una copia actualizada del item
     /// - Parameter updates: Closure para modificar propiedades
     /// - Returns: Nueva instancia con cambios aplicados
@@ -196,7 +196,7 @@ extension CatalogItemFS {
 
 // MARK: - Firestore Collection
 
-extension CatalogItemFS {
+public extension CatalogItemFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "catalogItems"
 }
@@ -204,7 +204,7 @@ extension CatalogItemFS {
 // MARK: - Sample Data (para previews y testing)
 
 #if DEBUG
-extension CatalogItemFS {
+public extension CatalogItemFS {
     /// Item de ejemplo: Adrenalina
     static let sampleAdrenaline = CatalogItemFS(
         id: "item_adrenaline",

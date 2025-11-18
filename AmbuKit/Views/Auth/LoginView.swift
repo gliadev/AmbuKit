@@ -63,15 +63,15 @@ struct LoginView: View {
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .alert("Error", isPresented: $showingError, presenting: appState.currentError) { _ in
-                Button("Aceptar", role: .cancel) { appState.currentError = nil }
+                Button("Aceptar", role: .cancel) { appState.clearError() }
             } message: { error in
                 Text(error.errorDescription ?? "Error desconocido")
             }
             .sheet(isPresented: $showingForgotPassword) {
                 ForgotPasswordView()
             }
-            .onChange(of: appState.currentError) { _, newValue in
-                showingError = newValue != nil
+            .onChange(of: appState.currentError != nil ) { _, newValue in
+                showingError = newValue
             }
         }
     }

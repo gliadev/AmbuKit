@@ -10,44 +10,44 @@ import FirebaseFirestore
 
 /// Modelo Firebase para Vehículos
 /// Representa una ambulancia o vehículo de emergencias
-struct VehicleFS: Codable, Identifiable {
+public struct VehicleFS: Codable, Identifiable {
     // MARK: - Firestore Properties
     
     /// ID único en Firestore (auto-generado)
-    @DocumentID var id: String?
+@DocumentID public var id: String?
     
     // MARK: - Data Properties
     
     /// Código único del vehículo (ej: "AMB-001", "SVA-2401")
-    var code: String
+    public var code: String
     
     /// Matrícula del vehículo (opcional) (ej: "1234-ABC")
-    var plate: String?
+    public var plate: String?
     
     /// Tipo de vehículo (ej: "SVB Básica", "SVA Avanzada", "SVAe Enfermerizada")
-    var type: String
+    public var type: String
     
     // MARK: - Relationships (por IDs)
     
     /// ID de la base a la que está asignado el vehículo (referencia a BaseFS)
-    var baseId: String?
+    public var baseId: String?
     
     /// IDs de los kits asignados al vehículo
     /// Array vacío si no tiene kits asignados
-    var kitIds: [String]
+    public var kitIds: [String]
     
     // MARK: - Timestamps
     
     /// Fecha de creación del registro
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Coding Keys
     
     /// Mapeo de propiedades a nombres de campos en Firestore
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case code
         case plate
@@ -70,7 +70,7 @@ struct VehicleFS: Codable, Identifiable {
     ///   - kitIds: IDs de kits asignados (default: array vacío)
     ///   - createdAt: Fecha de creación (default: ahora)
     ///   - updatedAt: Fecha de actualización (default: ahora)
-    init(
+    public init(
         id: String? = nil,
         code: String,
         plate: String? = nil,
@@ -93,7 +93,7 @@ struct VehicleFS: Codable, Identifiable {
 
 // MARK: - Computed Properties
 
-extension VehicleFS {
+public extension VehicleFS {
     /// Indica si tiene matrícula registrada
     var hasPlate: Bool {
         plate != nil && !(plate?.isEmpty ?? true)
@@ -148,7 +148,7 @@ extension VehicleFS {
 
 // MARK: - Kit Management
 
-extension VehicleFS {
+public extension VehicleFS {
     /// Añade un kit al vehículo
     /// - Parameter kitId: ID del kit a añadir
     /// - Returns: Nueva instancia con el kit añadido
@@ -181,7 +181,7 @@ extension VehicleFS {
 
 // MARK: - Base Assignment
 
-extension VehicleFS {
+public extension VehicleFS {
     /// Asigna el vehículo a una base
     /// - Parameter baseId: ID de la base
     /// - Returns: Nueva instancia con la base asignada
@@ -195,7 +195,7 @@ extension VehicleFS {
 
 // MARK: - Helper Methods
 
-extension VehicleFS {
+public extension VehicleFS {
     /// Crea una copia actualizada del vehículo
     /// - Parameter updates: Closure para modificar propiedades
     /// - Returns: Nueva instancia con cambios aplicados
@@ -209,14 +209,14 @@ extension VehicleFS {
 
 // MARK: - Firestore Collection
 
-extension VehicleFS {
+public extension VehicleFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "vehicles"
 }
 
 // MARK: - Vehicle Types
 
-extension VehicleFS {
+public extension VehicleFS {
     /// Tipos comunes de vehículos de emergencias
     enum VehicleType: String, CaseIterable {
         case svb = "SVB Básica"
@@ -243,7 +243,7 @@ extension VehicleFS {
 // MARK: - Sample Data (para previews y testing)
 
 #if DEBUG
-extension VehicleFS {
+public extension VehicleFS {
     /// Vehículo de ejemplo: SVA en Bilbao 1
     static let sampleSVA = VehicleFS(
         id: "vehicle_sva_1",
@@ -282,9 +282,3 @@ extension VehicleFS {
     ]
 }
 #endif
-
-
-
-
-
-

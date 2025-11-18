@@ -8,6 +8,7 @@
 import Foundation
 import FirebaseAuth
 import FirebaseFirestore
+import Combine
 
 /// Servicio de autenticación con Firebase
 /// Maneja login, logout, reset password y estado de autenticación
@@ -250,7 +251,7 @@ final class FirebaseAuthService: ObservableObject {
     /// - Parameter error: Error de Firebase
     /// - Returns: AuthError correspondiente
     private func mapFirebaseError(_ error: NSError) -> AuthError {
-        guard let errorCode = AuthErrorCode.Code(rawValue: error.code) else {
+        guard let errorCode = AuthErrorCode(rawValue: error.code) else {
             return .unknown(error.localizedDescription)
         }
         

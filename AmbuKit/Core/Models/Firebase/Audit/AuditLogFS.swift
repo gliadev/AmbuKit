@@ -9,63 +9,65 @@
 
 import Foundation
 import FirebaseFirestore
+import Combine
+
 
 /// Modelo de registro de auditoría para Firestore
 /// Registra todas las acciones realizadas por los usuarios para trazabilidad
 /// Equivalente a AuditLog.swift de SwiftData pero adaptado a Firebase
-struct AuditLogFS: Codable, Identifiable, Equatable {
+public struct AuditLogFS: Codable, Identifiable, Equatable {
     
     // MARK: - Properties
     
     /// ID del documento en Firestore (generado automáticamente)
-    @DocumentID var id: String?
+@DocumentID public var id: String?
     
     /// Fecha y hora en que ocurrió la acción
-    var timestamp: Date
+    public var timestamp: Date
     
     /// Nombre de usuario que realizó la acción
-    var actorUsername: String?
+    public var actorUsername: String?
     
     /// Rol del usuario que realizó la acción
-    var actorRole: String?
+    public var actorRole: String?
     
     /// Acción realizada (almacenado como String)
-    var actionRaw: String
+    public var actionRaw: String
     
     /// Entidad sobre la que se realizó la acción (almacenado como String)
-    var entityRaw: String
+    public var entityRaw: String
     
     /// ID de la entidad afectada
-    var entityId: String
+    public var entityId: String
     
     /// Detalles adicionales sobre la acción (opcional)
-    var details: String?
+    public var details: String?
     
     /// Fecha de creación del registro (mismo que timestamp generalmente)
-    var createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización (normalmente no se actualiza)
-    var updatedAt: Date
+    public var updatedAt: Date
     
     // MARK: - Computed Properties
     
     /// Acción de tipo enum (derivado de actionRaw)
     /// Este campo NO se guarda en Firestore
-    var action: ActionKind {
+    public var action: ActionKind {
         get { ActionKind(rawValue: actionRaw) ?? .read }
         set { actionRaw = newValue.rawValue }
     }
     
     /// Entidad de tipo enum (derivado de entityRaw)
     /// Este campo NO se guarda en Firestore
-    var entity: EntityKind {
+    public var entity: EntityKind {
         get { EntityKind(rawValue: entityRaw) ?? .audit }
         set { entityRaw = newValue.rawValue }
     }
     
     // MARK: - Coding Keys
     
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case id
         case timestamp
         case actorUsername
@@ -81,7 +83,7 @@ struct AuditLogFS: Codable, Identifiable, Equatable {
     
     // MARK: - Initialization
     
-    init(
+    public init(
         id: String? = UUID().uuidString,
         timestamp: Date = Date(),
         actorUsername: String?,
@@ -108,21 +110,21 @@ struct AuditLogFS: Codable, Identifiable, Equatable {
 
 // MARK: - Firestore Collection
 
-extension AuditLogFS {
+public extension AuditLogFS {
     /// Nombre de la colección en Firestore
     static let collectionName = "auditLogs"
 }
 
 // MARK: - Helpers
 
-extension AuditLogFS {
+public extension AuditLogFS {
     /// Crear AuditLogFS desde snapshot de Firestore
-    static func from(snapshot: DocumentSnapshot) throws -> AuditLogFS? {
+     static func from(snapshot: DocumentSnapshot) throws -> AuditLogFS? {
         try snapshot.data(as: AuditLogFS.self)
     }
     
     /// Convertir a diccionario para Firestore
-    func toDictionary() throws -> [String: Any] {
+     func toDictionary() throws -> [String: Any] {
         let encoder = Firestore.Encoder()
         return try encoder.encode(self)
     }
@@ -130,9 +132,9 @@ extension AuditLogFS {
 
 // MARK: - Business Logic Helpers
 
-extension AuditLogFS {
+public extension AuditLogFS {
     /// Descripción legible de la acción
-    var actionDescription: String {
+     var actionDescription: String {
         switch action {
         case .create: return "creó"
         case .read: return "consultó"
@@ -142,7 +144,7 @@ extension AuditLogFS {
     }
     
     /// Descripción legible de la entidad
-    var entityDescription: String {
+     var entityDescription: String {
         switch entity {
         case .base: return "base"
         case .vehicle: return "vehículo"
@@ -157,7 +159,7 @@ extension AuditLogFS {
     }
     
     /// Mensaje completo de auditoría para mostrar en UI
-    var fullMessage: String {
+     var fullMessage: String {
         let actor = actorUsername ?? "Usuario desconocido"
         let role = actorRole.map { " (\($0))" } ?? ""
         let detail = details.map { " - \($0)" } ?? ""
@@ -165,7 +167,7 @@ extension AuditLogFS {
     }
     
     /// Formato de fecha legible
-    var formattedTimestamp: String {
+     var formattedTimestamp: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
