@@ -5,48 +5,59 @@
 //  Created by Adolfo on 13/11/25.
 //
 
+
 import Foundation
 import FirebaseFirestore
+import Combine
 
-/// Modelo Firebase para Vehículos
-/// Representa una ambulancia o vehículo de emergencias
-public struct VehicleFS: Codable, Identifiable {
-    // MARK: - Firestore Properties
+/// Modelo de vehículo para Firestore
+/// Representa una ambulancia o vehículo médico
+/// Equivalente a Vehicle.swift de SwiftData pero adaptado a Firebase
+public struct VehicleFS: Codable, Identifiable, Sendable {
     
-    /// ID único en Firestore (auto-generado)
-@DocumentID public var id: String?
+    // MARK: - Properties
     
-    // MARK: - Data Properties
+    /// ID del documento en Firestore (generado automáticamente)
+    @DocumentID public var id: String?
     
-    /// Código único del vehículo (ej: "AMB-001", "SVA-2401")
-    public var code: String
+    /// Código único del vehículo (ej: "AMB001")
+    public let code: String
     
-    /// Matrícula del vehículo (opcional) (ej: "1234-ABC")
-    public var plate: String?
+    /// Matrícula del vehículo
+    public let plate: String
     
-    /// Tipo de vehículo (ej: "SVB Básica", "SVA Avanzada", "SVAe Enfermerizada")
-    public var type: String
+    /// Tipo de vehículo (almacenado como String)
+    public let type: String
     
-    // MARK: - Relationships (por IDs)
-    
-    /// ID de la base a la que está asignado el vehículo (referencia a BaseFS)
+    /// ID de la base a la que pertenece (referencia a BaseFS)
     public var baseId: String?
     
-    /// IDs de los kits asignados al vehículo
-    /// Array vacío si no tiene kits asignados
+    /// IDs de kits asignados a este vehículo
     public var kitIds: [String]
     
-    // MARK: - Timestamps
-    
-    /// Fecha de creación del registro
-    public var createdAt: Date
+    /// Fecha de creación
+    public let createdAt: Date
     
     /// Fecha de última actualización
     public var updatedAt: Date
     
+    // MARK: - Computed Properties (solo para UI)
+    
+    /// Tipo de vehículo como enum
+    public var vehicleType: VehicleType {
+        VehicleType(rawValue: type) ?? .ambulance
+    }
+    
+    /// Base cargada (debe obtenerse de Firestore)
+    /// Este campo NO se guarda en Firestore
+    public var base: BaseFS? = nil
+    
+    /// Kits cargados (deben obtenerse de Firestore)
+    /// Este campo NO se guarda en Firestore
+    public var kits: [KitFS] = []
+    
     // MARK: - Coding Keys
     
-    /// Mapeo de propiedades a nombres de campos en Firestore
     public enum CodingKeys: String, CodingKey {
         case id
         case code
@@ -56,25 +67,16 @@ public struct VehicleFS: Codable, Identifiable {
         case kitIds
         case createdAt
         case updatedAt
+        // vehicleType, base y kits NO se codifican (son solo para UI)
     }
     
-    // MARK: - Initializer
+    // MARK: - Initialization
     
-    /// Inicializador para crear nuevo vehículo
-    /// - Parameters:
-    ///   - id: ID de Firestore (opcional, auto-generado si es nil)
-    ///   - code: Código único del vehículo
-    ///   - plate: Matrícula del vehículo (opcional)
-    ///   - type: Tipo de vehículo
-    ///   - baseId: ID de la base asignada (opcional)
-    ///   - kitIds: IDs de kits asignados (default: array vacío)
-    ///   - createdAt: Fecha de creación (default: ahora)
-    ///   - updatedAt: Fecha de actualización (default: ahora)
     public init(
         id: String? = nil,
         code: String,
-        plate: String? = nil,
-        type: String,
+        plate: String,
+        type: VehicleType = .ambulance,
         baseId: String? = nil,
         kitIds: [String] = [],
         createdAt: Date = Date(),
@@ -83,7 +85,7 @@ public struct VehicleFS: Codable, Identifiable {
         self.id = id
         self.code = code
         self.plate = plate
-        self.type = type
+        self.type = type.rawValue
         self.baseId = baseId
         self.kitIds = kitIds
         self.createdAt = createdAt
@@ -91,119 +93,35 @@ public struct VehicleFS: Codable, Identifiable {
     }
 }
 
-// MARK: - Computed Properties
+// MARK: - VehicleType Enum
 
 public extension VehicleFS {
-    /// Indica si tiene matrícula registrada
-    var hasPlate: Bool {
-        plate != nil && !(plate?.isEmpty ?? true)
-    }
-    
-    /// Indica si está asignado a una base
-    var hasBase: Bool {
-        baseId != nil && !(baseId?.isEmpty ?? true)
-    }
-    
-    /// Indica si tiene kits asignados
-    var hasKits: Bool {
-        !kitIds.isEmpty
-    }
-    
-    /// Cantidad de kits asignados
-    var kitCount: Int {
-        kitIds.count
-    }
-    
-    /// Texto descriptivo del vehículo (código + matrícula si existe)
-    var displayName: String {
-        if hasPlate {
-            return "\(code) (\(plate!))"
+    enum VehicleType: String, Codable, CaseIterable, Sendable {
+        case ambulance = "ambulance"
+        case van = "van"
+        case car = "car"
+        case motorcycle = "motorcycle"
+        case helicopter = "helicopter"
+        
+        var displayName: String {
+            switch self {
+            case .ambulance: return "Ambulancia"
+            case .van: return "Furgoneta"
+            case .car: return "Coche"
+            case .motorcycle: return "Motocicleta"
+            case .helicopter: return "Helicóptero"
+            }
         }
-        return code
-    }
-    
-    /// Texto para mostrar la cantidad de kits
-    var kitCountText: String {
-        switch kitCount {
-        case 0:
-            return "Sin kits"
-        case 1:
-            return "1 kit"
-        default:
-            return "\(kitCount) kits"
+        
+        var icon: String {
+            switch self {
+            case .ambulance: return "cross.case.fill"
+            case .van: return "car.fill"
+            case .car: return "car"
+            case .motorcycle: return "bicycle"
+            case .helicopter: return "airplane"
+            }
         }
-    }
-    
-    /// Icono SF Symbol según el tipo de vehículo
-    var typeIcon: String {
-        if type.contains("SVA") {
-            return "cross.case.fill"
-        } else if type.contains("SVB") {
-            return "cross.circle.fill"
-        } else {
-            return "car.fill"
-        }
-    }
-}
-
-// MARK: - Kit Management
-
-public extension VehicleFS {
-    /// Añade un kit al vehículo
-    /// - Parameter kitId: ID del kit a añadir
-    /// - Returns: Nueva instancia con el kit añadido
-    func addingKit(_ kitId: String) -> VehicleFS {
-        var copy = self
-        if !copy.kitIds.contains(kitId) {
-            copy.kitIds.append(kitId)
-            copy.updatedAt = Date()
-        }
-        return copy
-    }
-    
-    /// Elimina un kit del vehículo
-    /// - Parameter kitId: ID del kit a eliminar
-    /// - Returns: Nueva instancia sin el kit
-    func removingKit(_ kitId: String) -> VehicleFS {
-        var copy = self
-        copy.kitIds.removeAll { $0 == kitId }
-        copy.updatedAt = Date()
-        return copy
-    }
-    
-    /// Verifica si un kit está asignado a este vehículo
-    /// - Parameter kitId: ID del kit a verificar
-    /// - Returns: true si el kit está asignado
-    func hasKit(_ kitId: String) -> Bool {
-        kitIds.contains(kitId)
-    }
-}
-
-// MARK: - Base Assignment
-
-public extension VehicleFS {
-    /// Asigna el vehículo a una base
-    /// - Parameter baseId: ID de la base
-    /// - Returns: Nueva instancia con la base asignada
-    func assignedTo(base baseId: String?) -> VehicleFS {
-        var copy = self
-        copy.baseId = baseId
-        copy.updatedAt = Date()
-        return copy
-    }
-}
-
-// MARK: - Helper Methods
-
-public extension VehicleFS {
-    /// Crea una copia actualizada del vehículo
-    /// - Parameter updates: Closure para modificar propiedades
-    /// - Returns: Nueva instancia con cambios aplicados
-    func updated(_ updates: (inout VehicleFS) -> Void) -> VehicleFS {
-        var copy = self
-        copy.updatedAt = Date()
-        updates(&copy)
-        return copy
     }
 }
 
@@ -214,71 +132,70 @@ public extension VehicleFS {
     static let collectionName = "vehicles"
 }
 
-// MARK: - Vehicle Types
+
+// MARK: - Business Logic Helpers
 
 public extension VehicleFS {
-    /// Tipos comunes de vehículos de emergencias
-    enum VehicleType: String, CaseIterable {
-        case svb = "SVB Básica"
-        case svae = "SVAe Enfermerizada"
-        case sva = "SVA Avanzada"
-        
-        var description: String {
-            rawValue
+    /// Añade un kit al vehículo
+    mutating func addKit(kitId: String) {
+        guard !kitIds.contains(kitId) else { return }
+        kitIds.append(kitId)
+        updatedAt = Date()
+    }
+    
+    /// Elimina un kit del vehículo
+    mutating func removeKit(kitId: String) {
+        kitIds.removeAll { $0 == kitId }
+        updatedAt = Date()
+    }
+    
+    /// Verifica si un kit está asignado a este vehículo
+    func hasKit(kitId: String) -> Bool {
+        kitIds.contains(kitId)
+    }
+    
+    /// Número total de kits en este vehículo
+    var kitCount: Int {
+        kitIds.count
+    }
+    
+    /// Asigna el vehículo a una base
+    mutating func assignToBase(baseId: String) {
+        self.baseId = baseId
+        updatedAt = Date()
+    }
+    
+    /// Desasigna el vehículo de su base actual
+    mutating func unassignFromBase() {
+        self.baseId = nil
+        updatedAt = Date()
+    }
+}
+
+// MARK: - Validation
+
+public extension VehicleFS {
+    /// Valida que los datos del vehículo sean correctos
+    func validate() throws {
+        guard !code.isEmpty else {
+            throw ValidationError.emptyCode
         }
+        guard !plate.isEmpty else {
+            throw ValidationError.emptyPlate
+        }
+    }
+    
+    enum ValidationError: LocalizedError {
+        case emptyCode
+        case emptyPlate
         
-        var icon: String {
+        public var errorDescription: String? {
             switch self {
-            case .svb:
-                return "cross.circle.fill"
-            case .svae:
-                return "cross.case.fill"
-            case .sva:
-                return "staroflife.fill"
+            case .emptyCode:
+                return "El código del vehículo no puede estar vacío"
+            case .emptyPlate:
+                return "La matrícula del vehículo no puede estar vacía"
             }
         }
     }
 }
-
-// MARK: - Sample Data (para previews y testing)
-
-#if DEBUG
-public extension VehicleFS {
-    /// Vehículo de ejemplo: SVA en Bilbao 1
-    static let sampleSVA = VehicleFS(
-        id: "vehicle_sva_1",
-        code: "SVA-2401",
-        plate: "1234-ABC",
-        type: VehicleType.sva.rawValue,
-        baseId: "base_bilbao1",
-        kitIds: ["kit_ampulario", "kit_principal"]
-    )
-    
-    /// Vehículo de ejemplo: SVB en Trapaga
-    static let sampleSVB = VehicleFS(
-        id: "vehicle_svb_1",
-        code: "SVB-2333",
-        plate: "5678-DEF",
-        type: VehicleType.svb.rawValue,
-        baseId: "base_trapaga",
-        kitIds: ["kit_basico"]
-    )
-    
-    /// Vehículo de ejemplo sin asignar
-    static let sampleUnassigned = VehicleFS(
-        id: "vehicle_spare",
-        code: "AMB-RESERVA",
-        plate: nil,
-        type: VehicleType.svae.rawValue,
-        baseId: nil,
-        kitIds: []
-    )
-    
-    /// Array de vehículos de ejemplo
-    static let samples: [VehicleFS] = [
-        sampleSVA,
-        sampleSVB,
-        sampleUnassigned
-    ]
-}
-#endif

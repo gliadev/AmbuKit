@@ -112,9 +112,10 @@ struct MainTabViewFS: View {
     
     private func loadSwiftDataUser() async {
         // Buscar usuario en SwiftData por username
+        let usernameToFind = currentUser.username
         let descriptor = FetchDescriptor<User>(
-            predicate: #Predicate { $0.username == currentUser.username }
-        )
+            predicate: #Predicate { $0.username == usernameToFind }
+            )
         
         swiftDataUser = try? context.fetch(descriptor).first
         

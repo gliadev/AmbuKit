@@ -6,24 +6,23 @@
 //
 
 
-
 import Foundation
 import FirebaseFirestore
 import Combine
 
 /// Modelo de rol para Firestore
-public struct RoleFS: Codable, Identifiable, Equatable {
+public struct RoleFS: Codable, Identifiable, Equatable, Sendable {
     
     @DocumentID public var id: String?
-    public var kindRaw: String
-    public var displayName: String
-    public var createdAt: Date
+    public let kindRaw: String
+    public let displayName: String
+    public let createdAt: Date
     public var updatedAt: Date
     
     // Computed property para acceder al enum RoleKind
     public var kind: RoleKind {
         get { RoleKind(rawValue: kindRaw) ?? .sanitary }
-        set { kindRaw = newValue.rawValue }
+        set { /* No se puede modificar en struct con let */ }
     }
     
     public init(

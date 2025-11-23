@@ -57,7 +57,7 @@ final class FirebaseAuthService: ObservableObject {
     
     // MARK: - Auth State Listener
     
-    private var authStateHandle: AuthStateDidChangeListenerHandle?
+    nonisolated(unsafe)  private var authStateHandle: AuthStateDidChangeListenerHandle?
     
     // MARK: - Initialization
     

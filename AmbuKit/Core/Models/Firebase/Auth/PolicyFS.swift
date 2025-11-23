@@ -15,32 +15,32 @@ import Combine
 /// Equivalente a Policy.swift de SwiftData pero adaptado a Firebase
 
 
-public struct PolicyFS: Codable, Identifiable, Equatable {
+public struct PolicyFS: Codable, Identifiable, Equatable, Sendable {
     // MARK: - Properties
         
         /// ID del documento en Firestore (generado automáticamente)
         @DocumentID public var id: String?
         
         /// Entidad a la que aplica la política (almacenado como String)
-        public var entityRaw: String
+        public let entityRaw: String
         
         /// Permiso para crear (CREATE)
-        public var canCreate: Bool
+        public let canCreate: Bool
         
         /// Permiso para leer (READ)
-        public var canRead: Bool
+        public let canRead: Bool
         
         /// Permiso para actualizar (UPDATE)
-        public var canUpdate: Bool
+        public let canUpdate: Bool
         
         /// Permiso para eliminar (DELETE)
-        public var canDelete: Bool
+        public let canDelete: Bool
         
         /// ID del rol al que pertenece esta política (referencia a RoleFS)
-        public var roleId: String?
+        public let roleId: String?
         
         /// Fecha de creación
-        public var createdAt: Date
+        public let createdAt: Date
         
         /// Fecha de última actualización
         public var updatedAt: Date
@@ -51,7 +51,7 @@ public struct PolicyFS: Codable, Identifiable, Equatable {
         /// Este campo NO se guarda en Firestore
         public var entity: EntityKind {
             get { EntityKind(rawValue: entityRaw) ?? .kit }
-            set { entityRaw = newValue.rawValue }
+            set { /* No se puede modificar en struct con let */ }
         }
         
         /// Rol cargado (debe obtenerse de Firestore)
@@ -122,24 +122,25 @@ public struct PolicyFS: Codable, Identifiable, Equatable {
 
     // MARK: - Business Logic Helpers
 
-    public extension PolicyFS {
-        /// Verifica si tiene permiso para una acción específica
-        func hasPermission(for action: ActionKind) -> Bool {
-            switch action {
-            case .create: return canCreate
-            case .read: return canRead
-            case .update: return canUpdate
-            case .delete: return canDelete
-            }
-        }
-        
-        /// Verifica si tiene acceso completo (todos los permisos)
-        var hasFullAccess: Bool {
-            canCreate && canRead && canUpdate && canDelete
-        }
-        
-        /// Verifica si solo tiene permisos de lectura
-        var isReadOnly: Bool {
-            canRead && !canCreate && !canUpdate && !canDelete
+public extension PolicyFS {
+    /// Verifica si tiene permiso para una acción específica
+    func hasPermission(for action: ActionKind) -> Bool {
+        switch action {
+        case .create: return canCreate
+        case .read: return canRead
+        case .update: return canUpdate
+        case .delete: return canDelete
         }
     }
+    
+    /// Verifica si tiene acceso completo (todos los permisos)
+    var hasFullAccess: Bool {
+        canCreate && canRead && canUpdate && canDelete
+    }
+    
+    /// Verifica si solo tiene permisos de lectura
+    var isReadOnly: Bool {
+        canRead && !canCreate && !canUpdate && !canDelete
+    }
+    
+}

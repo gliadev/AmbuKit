@@ -12,7 +12,7 @@ import Combine
 
 /// Modelo de usuario para Firestore
 /// Equivalente a User.swift de SwiftData pero adaptado a Firebase
-public struct UserFS: Codable, Identifiable {
+public struct UserFS: Codable, Identifiable, Sendable {
     
     // MARK: - Properties
     
@@ -20,28 +20,28 @@ public struct UserFS: Codable, Identifiable {
     @DocumentID public var id: String?
     
     /// UID de Firebase Auth (único por usuario)
-    public var uid: String
+    public let uid: String
     
     /// Nombre de usuario (único)
-    public var username: String
+    public let username: String
     
     /// Nombre completo del usuario
-    public var fullName: String
+    public let fullName: String
     
     /// Email del usuario
-    public var email: String
+    public let email: String
     
     /// Indica si el usuario está activo
     public var active: Bool
     
     /// ID del rol asignado (referencia a RoleFS)
-    public var roleId: String?
+    public let roleId: String?
     
     /// ID de la base asignada (referencia a BaseFS)
-    public var baseId: String?
+    public let baseId: String?
     
     /// Fecha de creación
-    public var createdAt: Date
+    public let createdAt: Date
     
     /// Fecha de última actualización
     public var updatedAt: Date

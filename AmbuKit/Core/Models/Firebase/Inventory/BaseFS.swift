@@ -5,50 +5,49 @@
 //  Created by Adolfo on 13/11/25.
 //
 
-
 import Foundation
 import FirebaseFirestore
+import Combine
 
-/// Modelo de base/estación para Firestore
-/// Representa una base o sede donde se ubican vehículos/ambulancias
-public struct BaseFS: Codable, Identifiable, Equatable {
+/// Modelo de base médica para Firestore
+/// Representa una base desde donde operan las ambulancias
+/// Equivalente a Base.swift de SwiftData pero adaptado a Firebase
+public struct BaseFS: Codable, Identifiable, Sendable {
     
-    // MARK: - Firestore Properties
+    // MARK: - Properties
     
-    /// ID único en Firestore (auto-generado)
+    /// ID del documento en Firestore (generado automáticamente)
     @DocumentID public var id: String?
     
-    // MARK: - Data Properties
+    /// Código único de la base (ej: "BASE001")
+    public let code: String
     
-    /// Código único de la base (ej: "2401", "2402", "2333")
-    public var code: String
+    /// Nombre de la base
+    public let name: String
     
-    /// Nombre descriptivo de la base (ej: "Bilbao 1", "Trapaga")
-    public var name: String
-    
-    /// Ubicación o dirección de la base (opcional)
-    public var address: String?
+    /// Dirección física de la base
+    public let address: String
     
     /// Indica si la base está activa
     public var active: Bool
     
-    // MARK: - Relationships (por IDs)
-    
-    /// IDs de los vehículos asignados a esta base
-    /// Array vacío si no hay vehículos asignados
+    /// IDs de vehículos asignados a esta base
     public var vehicleIds: [String]
     
-    // MARK: - Timestamps
-    
-    /// Fecha de creación del registro
-    public var createdAt: Date
+    /// Fecha de creación
+    public let createdAt: Date
     
     /// Fecha de última actualización
     public var updatedAt: Date
     
+    // MARK: - Computed Properties (solo para UI)
+    
+    /// Vehículos cargados (deben obtenerse de Firestore)
+    /// Este campo NO se guarda en Firestore
+    public var vehicles: [VehicleFS] = []
+    
     // MARK: - Coding Keys
     
-    /// Mapeo de propiedades a nombres de campos en Firestore
     public enum CodingKeys: String, CodingKey {
         case id
         case code
@@ -58,25 +57,16 @@ public struct BaseFS: Codable, Identifiable, Equatable {
         case vehicleIds
         case createdAt
         case updatedAt
+        // vehicles NO se codifica (es solo para UI)
     }
     
-    // MARK: - Initializer
+    // MARK: - Initialization
     
-    /// Inicializador para crear nueva base
-    /// - Parameters:
-    ///   - id: ID de Firestore (opcional, auto-generado si es nil)
-    ///   - code: Código único de la base
-    ///   - name: Nombre descriptivo
-    ///   - address: Ubicación o dirección (opcional)
-    ///   - active: Si está activa (default: true)
-    ///   - vehicleIds: IDs de vehículos asignados (default: array vacío)
-    ///   - createdAt: Fecha de creación (default: ahora)
-    ///   - updatedAt: Fecha de actualización (default: ahora)
     public init(
         id: String? = nil,
         code: String,
         name: String,
-        address: String? = nil,
+        address: String,
         active: Bool = true,
         vehicleIds: [String] = [],
         createdAt: Date = Date(),
@@ -93,84 +83,6 @@ public struct BaseFS: Codable, Identifiable, Equatable {
     }
 }
 
-// MARK: - Computed Properties
-
-public extension BaseFS {
-    /// Indica si tiene dirección definida
-    var hasAddress: Bool {
-        address != nil && !(address?.isEmpty ?? true)
-    }
-    
-    /// Indica si tiene vehículos asignados
-    var hasVehicles: Bool {
-        !vehicleIds.isEmpty
-    }
-    
-    /// Cantidad de vehículos asignados
-    var vehicleCount: Int {
-        vehicleIds.count
-    }
-    
-    /// Texto para mostrar la cantidad de vehículos
-    var vehicleCountText: String {
-        switch vehicleCount {
-        case 0:
-            return "Sin vehículos"
-        case 1:
-            return "1 vehículo"
-        default:
-            return "\(vehicleCount) vehículos"
-        }
-    }
-}
-
-// MARK: - Vehicle Management
-
-public extension BaseFS {
-    /// Añade un vehículo a la base
-    /// - Parameter vehicleId: ID del vehículo a añadir
-    /// - Returns: Nueva instancia con el vehículo añadido
-    func addingVehicle(_ vehicleId: String) -> BaseFS {
-        var copy = self
-        if !copy.vehicleIds.contains(vehicleId) {
-            copy.vehicleIds.append(vehicleId)
-            copy.updatedAt = Date()
-        }
-        return copy
-    }
-    
-    /// Elimina un vehículo de la base
-    /// - Parameter vehicleId: ID del vehículo a eliminar
-    /// - Returns: Nueva instancia sin el vehículo
-    func removingVehicle(_ vehicleId: String) -> BaseFS {
-        var copy = self
-        copy.vehicleIds.removeAll { $0 == vehicleId }
-        copy.updatedAt = Date()
-        return copy
-    }
-    
-    /// Verifica si un vehículo está asignado a esta base
-    /// - Parameter vehicleId: ID del vehículo a verificar
-    /// - Returns: true si el vehículo está asignado
-    func hasVehicle(_ vehicleId: String) -> Bool {
-        vehicleIds.contains(vehicleId)
-    }
-}
-
-// MARK: - Helper Methods
-
-public extension BaseFS {
-    /// Crea una copia actualizada de la base
-    /// - Parameter updates: Closure para modificar propiedades
-    /// - Returns: Nueva instancia con cambios aplicados
-    func updated(_ updates: (inout BaseFS) -> Void) -> BaseFS {
-        var copy = self
-        copy.updatedAt = Date()
-        updates(&copy)
-        return copy
-    }
-}
-
 // MARK: - Firestore Collection
 
 public extension BaseFS {
@@ -178,7 +90,7 @@ public extension BaseFS {
     static let collectionName = "bases"
 }
 
-// MARK: - Firestore Helpers
+// MARK: - Helpers
 
 public extension BaseFS {
     /// Crear BaseFS desde snapshot de Firestore
@@ -193,45 +105,63 @@ public extension BaseFS {
     }
 }
 
-// MARK: - Sample Data (para previews y testing)
+// MARK: - Business Logic Helpers
 
-#if DEBUG
 public extension BaseFS {
-    /// Base de ejemplo: Bilbao 1
-    static let sampleBilbao1 = BaseFS(
-        id: "base_bilbao1",
-        code: "2401",
-        name: "Bilbao 1",
-        address: "Calle Gran Vía, 45, Bilbao",
-        active: true,
-        vehicleIds: ["vehicle_1", "vehicle_2"]
-    )
+    /// Añade un vehículo a la base
+    mutating func addVehicle(vehicleId: String) {
+        guard !vehicleIds.contains(vehicleId) else { return }
+        vehicleIds.append(vehicleId)
+        updatedAt = Date()
+    }
     
-    /// Base de ejemplo: Trapaga
-    static let sampleTrapaga = BaseFS(
-        id: "base_trapaga",
-        code: "2333",
-        name: "Trapaga",
-        address: "Avda. Principal, 12, Trapaga",
-        active: true,
-        vehicleIds: ["vehicle_3"]
-    )
+    /// Elimina un vehículo de la base
+    mutating func removeVehicle(vehicleId: String) {
+        vehicleIds.removeAll { $0 == vehicleId }
+        updatedAt = Date()
+    }
     
-    /// Base de ejemplo sin vehículos
-    static let sampleEmpty = BaseFS(
-        id: "base_empty",
-        code: "9999",
-        name: "Base Nueva",
-        address: nil,
-        active: true,
-        vehicleIds: []
-    )
+    /// Verifica si un vehículo pertenece a esta base
+    func hasVehicle(vehicleId: String) -> Bool {
+        vehicleIds.contains(vehicleId)
+    }
     
-    /// Array de bases de ejemplo
-    static let samples: [BaseFS] = [
-        sampleBilbao1,
-        sampleTrapaga,
-        sampleEmpty
-    ]
+    /// Número total de vehículos en esta base
+    var vehicleCount: Int {
+        vehicleIds.count
+    }
 }
-#endif
+
+// MARK: - Validation
+
+public extension BaseFS {
+    /// Valida que los datos de la base sean correctos
+    func validate() throws {
+        guard !code.isEmpty else {
+            throw ValidationError.emptyCode
+        }
+        guard !name.isEmpty else {
+            throw ValidationError.emptyName
+        }
+        guard !address.isEmpty else {
+            throw ValidationError.emptyAddress
+        }
+    }
+    
+    enum ValidationError: LocalizedError {
+        case emptyCode
+        case emptyName
+        case emptyAddress
+        
+        public var errorDescription: String? {
+            switch self {
+            case .emptyCode:
+                return "El código de la base no puede estar vacío"
+            case .emptyName:
+                return "El nombre de la base no puede estar vacío"
+            case .emptyAddress:
+                return "La dirección de la base no puede estar vacía"
+            }
+        }
+    }
+}
