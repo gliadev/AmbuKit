@@ -135,6 +135,25 @@ public extension VehicleFS {
 
 // MARK: - Business Logic Helpers
 
+// MARK: - Computed Properties (for Services)
+
+public extension VehicleFS {
+    /// Verifica si el vehículo tiene kits asignados
+    var hasKits: Bool {
+        !kitIds.isEmpty
+    }
+    
+    /// Verifica si el vehículo tiene base asignada
+    var hasBase: Bool {
+        baseId != nil
+    }
+    
+    /// ID de la base a la que está asignado (alias para compatibilidad)
+    var assignedTo: String? {
+        baseId
+    }
+}
+
 public extension VehicleFS {
     /// Añade un kit al vehículo
     mutating func addKit(kitId: String) {

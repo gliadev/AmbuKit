@@ -70,7 +70,7 @@ final class BaseService: ObservableObject {
         }
         
         // 4. Crear base
-        var base = BaseFS(code: code, name: name, address: address, active: active)
+        var base = BaseFS(code: code, name: name, address: address ?? "", active: active)
         
         // 5. Guardar en Firestore
         do {
@@ -170,9 +170,7 @@ final class BaseService: ObservableObject {
                 .document(id)
                 .getDocument()
             
-            guard let base = try? BaseFS.from(snapshot: document) else {
-                return nil
-            }
+            guard let base = try? document.data(as: BaseFS.self) else { return nil }
             
             baseCache[id] = base
             return base
@@ -192,7 +190,7 @@ final class BaseService: ObservableObject {
                 .getDocuments()
             
             guard let document = snapshot.documents.first,
-                  let base = try? BaseFS.from(snapshot: document) else {
+                  let base = try? document.data(as: BaseFS.self) else {
                 return nil
             }
             
@@ -222,7 +220,7 @@ final class BaseService: ObservableObject {
                 .getDocuments()
             
             let bases = snapshot.documents.compactMap { doc -> BaseFS? in
-                try? BaseFS.from(snapshot: doc)
+                try? doc.data(as: BaseFS.self)
             }
             
             bases.forEach { base in
@@ -269,11 +267,9 @@ final class BaseService: ObservableObject {
             throw BaseServiceError.baseNotFound("Base no encontrada")
         }
         
-        if base.hasVehicle(vehicleId) {
-            return // Ya está asignado
-        }
+       _ = base.hasVehicle(vehicleId: vehicleId)
         
-        base = base.addingVehicle(vehicleId)
+        base = base.addingVehicle(vehicleId: vehicleId)
         try await update(base, actor: actor)
         
         print("✅ Vehículo '\(vehicleId)' asignado a base '\(base.name)'")
@@ -289,11 +285,11 @@ final class BaseService: ObservableObject {
             throw BaseServiceError.baseNotFound("Base no encontrada")
         }
         
-        if !base.hasVehicle(vehicleId) {
+        if !base.hasVehicle(vehicleId: vehicleId) {
             return // No está asignado
         }
         
-        base = base.removingVehicle(vehicleId)
+        base = base.removingVehicle(vehicleId: vehicleId)
         try await update(base, actor: actor)
         
         print("✅ Vehículo '\(vehicleId)' desasignado de base '\(base.name)'")
@@ -302,7 +298,7 @@ final class BaseService: ObservableObject {
     /// Obtiene el ID de la base asignada a un vehículo
     func getBaseIdForVehicle(_ vehicleId: String) async -> String? {
         let bases = await getAllBases()
-        return bases.first(where: { $0.hasVehicle(vehicleId) })?.id
+        return bases.first(where: { $0.hasVehicle(vehicleId: vehicleId) })?.id
     }
     
     // MARK: - Status Management
@@ -313,7 +309,8 @@ final class BaseService: ObservableObject {
             throw BaseServiceError.baseNotFound("Base no encontrada")
         }
         
-        base = base.updated { $0.active = true }
+        base.active = true
+        base.updatedAt = Date()
         try await update(base, actor: actor)
         
         print("✅ Base '\(base.name)' activada")
@@ -325,7 +322,8 @@ final class BaseService: ObservableObject {
             throw BaseServiceError.baseNotFound("Base no encontrada")
         }
         
-        base = base.updated { $0.active = false }
+        base.active = false
+        base.updatedAt = Date()
         try await update(base, actor: actor)
         
         print("✅ Base '\(base.name)' desactivada")
@@ -414,7 +412,7 @@ extension BaseService {
         return allBases.filter {
             $0.name.lowercased().contains(lowercased) ||
             $0.code.lowercased().contains(lowercased) ||
-            ($0.address?.lowercased().contains(lowercased) ?? false)
+            ($0.address.lowercased().contains(lowercased))
         }
     }
 }

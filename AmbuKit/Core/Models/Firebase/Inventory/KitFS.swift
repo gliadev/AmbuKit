@@ -7,52 +7,57 @@
 
 import Foundation
 import FirebaseFirestore
+import Combine
 
-/// Modelo Firebase para Kits
-/// Representa un botiquín o kit de emergencias con su inventario
-public struct KitFS: Codable, Identifiable {
-    // MARK: - Firestore Properties
+/// Modelo de kit médico para Firestore
+/// Representa un botiquín con sus items
+/// Equivalente a Kit.swift de SwiftData pero adaptado a Firebase
+public struct KitFS: Codable, Identifiable, Sendable {
     
-    /// ID único en Firestore (auto-generado)
-@DocumentID public var id: String?
+    // MARK: - Properties
     
-    // MARK: - Data Properties
+    /// ID del documento en Firestore (generado automáticamente)
+    @DocumentID public var id: String?
     
-    /// Código único del kit (ej: "KIT-001", "AMPULARIO-SVA")
-    public var code: String
+    /// Código único del kit (ej: "KIT001")
+    public let code: String
     
-    /// Nombre descriptivo del kit (ej: "Kit Principal SVA", "Ampulario")
-    public var name: String
+    /// Nombre del kit
+    public let name: String
     
-    /// Tipo de kit (enum compartido con SwiftData)
-    public var type: KitType
+    /// Tipo de kit (ej: "emergency", "trauma", etc.)
+    public let type: String
     
-    /// Estado del kit (ej: "ok", "revision", "mantenimiento")
-    public var status: String
+    /// Estado actual del kit
+    public var status: Status
     
-    /// Fecha de última auditoría/revisión (opcional)
+    /// Fecha de la última auditoría
     public var lastAudit: Date?
-    
-    // MARK: - Relationships (por IDs)
     
     /// ID del vehículo al que está asignado (referencia a VehicleFS)
     public var vehicleId: String?
     
-    /// IDs de los items que contiene el kit
-    /// Array vacío si no tiene items
+    /// IDs de items del kit
     public var itemIds: [String]
     
-    // MARK: - Timestamps
-    
-    /// Fecha de creación del registro
-    public var createdAt: Date
+    /// Fecha de creación
+    public let createdAt: Date
     
     /// Fecha de última actualización
     public var updatedAt: Date
     
+    // MARK: - Computed Properties (solo para UI)
+    
+    /// Vehículo cargado (debe obtenerse de Firestore)
+    /// Este campo NO se guarda en Firestore
+    public var vehicle: VehicleFS? = nil
+    
+    /// Items cargados (deben obtenerse de Firestore)
+    /// Este campo NO se guarda en Firestore
+    public var items: [KitItemFS] = []
+    
     // MARK: - Coding Keys
     
-    /// Mapeo de propiedades a nombres de campos en Firestore
     public enum CodingKeys: String, CodingKey {
         case id
         case code
@@ -64,28 +69,17 @@ public struct KitFS: Codable, Identifiable {
         case itemIds
         case createdAt
         case updatedAt
+        // vehicle e items NO se codifican (son solo para UI)
     }
     
-    // MARK: - Initializer
+    // MARK: - Initialization
     
-    /// Inicializador para crear nuevo kit
-    /// - Parameters:
-    ///   - id: ID de Firestore (opcional, auto-generado si es nil)
-    ///   - code: Código único del kit
-    ///   - name: Nombre descriptivo
-    ///   - type: Tipo de kit (SVB, SVAe, SVA, custom)
-    ///   - status: Estado del kit (default: "ok")
-    ///   - lastAudit: Fecha de última auditoría (opcional)
-    ///   - vehicleId: ID del vehículo asignado (opcional)
-    ///   - itemIds: IDs de items contenidos (default: array vacío)
-    ///   - createdAt: Fecha de creación (default: ahora)
-    ///   - updatedAt: Fecha de actualización (default: ahora)
     public init(
         id: String? = nil,
         code: String,
         name: String,
-        type: KitType,
-        status: String = "ok",
+        type: String = "general",
+        status: Status = .active,
         lastAudit: Date? = nil,
         vehicleId: String? = nil,
         itemIds: [String] = [],
@@ -105,222 +99,41 @@ public struct KitFS: Codable, Identifiable {
     }
 }
 
-// MARK: - Computed Properties
+// MARK: - Status Enum
 
 public extension KitFS {
-    /// Indica si está asignado a un vehículo
-    var isAssigned: Bool {
-        vehicleId != nil && !(vehicleId?.isEmpty ?? true)
-    }
-    
-    /// Indica si tiene items
-    var hasItems: Bool {
-        !itemIds.isEmpty
-    }
-    
-    /// Cantidad de items en el kit
-    var itemCount: Int {
-        itemIds.count
-    }
-    
-    /// Indica si tiene fecha de auditoría
-    var hasBeenAudited: Bool {
-        lastAudit != nil
-    }
-    
-    /// Texto para mostrar la cantidad de items
-    var itemCountText: String {
-        switch itemCount {
-        case 0:
-            return "Sin items"
-        case 1:
-            return "1 item"
-        default:
-            return "\(itemCount) items"
-        }
-    }
-    
-    /// Color del estado para UI
-    var statusColor: String {
-        switch status.lowercased() {
-        case "ok":
-            return "green"
-        case "revision", "revisión":
-            return "orange"
-        case "mantenimiento":
-            return "red"
-        default:
-            return "gray"
-        }
-    }
-    
-    /// Icono SF Symbol según el estado
-    var statusIcon: String {
-        switch status.lowercased() {
-        case "ok":
-            return "checkmark.circle.fill"
-        case "revision", "revisión":
-            return "exclamationmark.triangle.fill"
-        case "mantenimiento":
-            return "wrench.fill"
-        default:
-            return "questionmark.circle.fill"
-        }
-    }
-    
-    /// Días desde la última auditoría
-    var daysSinceLastAudit: Int? {
-        guard let lastAudit = lastAudit else { return nil }
-        let calendar = Calendar.current
-        let days = calendar.dateComponents([.day], from: lastAudit, to: Date()).day
-        return days
-    }
-    
-    /// Texto descriptivo de la última auditoría
-    var lastAuditText: String {
-        guard let days = daysSinceLastAudit else {
-            return "Nunca auditado"
-        }
-        
-        switch days {
-        case 0:
-            return "Auditado hoy"
-        case 1:
-            return "Auditado ayer"
-        case 2...7:
-            return "Auditado hace \(days) días"
-        case 8...30:
-            return "Auditado hace \(days/7) semanas"
-        case 31...365:
-            return "Auditado hace \(days/30) meses"
-        default:
-            return "Auditoría antigua"
-        }
-    }
-    
-    /// Indica si necesita auditoría (más de 30 días)
-    var needsAudit: Bool {
-        guard let days = daysSinceLastAudit else { return true }
-        return days > 30
-    }
-}
-
-// MARK: - Item Management
-
-public extension KitFS {
-    /// Añade un item al kit
-    /// - Parameter itemId: ID del item a añadir
-    /// - Returns: Nueva instancia con el item añadido
-    func addingItem(_ itemId: String) -> KitFS {
-        var copy = self
-        if !copy.itemIds.contains(itemId) {
-            copy.itemIds.append(itemId)
-            copy.updatedAt = Date()
-        }
-        return copy
-    }
-    
-    /// Elimina un item del kit
-    /// - Parameter itemId: ID del item a eliminar
-    /// - Returns: Nueva instancia sin el item
-    func removingItem(_ itemId: String) -> KitFS {
-        var copy = self
-        copy.itemIds.removeAll { $0 == itemId }
-        copy.updatedAt = Date()
-        return copy
-    }
-    
-    /// Verifica si contiene un item específico
-    /// - Parameter itemId: ID del item a verificar
-    /// - Returns: true si el item está en el kit
-    func containsItem(_ itemId: String) -> Bool {
-        itemIds.contains(itemId)
-    }
-}
-
-// MARK: - Status Management
-
-public extension KitFS {
-    /// Estados válidos para un kit
-     enum Status: String, CaseIterable {
-        case ok = "ok"
-        case revision = "revision"
-        case maintenance = "mantenimiento"
+    enum Status: String, Codable, CaseIterable, Sendable {
+        case active = "active"
+        case inactive = "inactive"
+        case maintenance = "maintenance"
+        case expired = "expired"
         
         var displayName: String {
             switch self {
-            case .ok: return "Operativo"
-            case .revision: return "En Revisión"
+            case .active: return "Activo"
+            case .inactive: return "Inactivo"
             case .maintenance: return "Mantenimiento"
+            case .expired: return "Caducado"
             }
         }
         
         var color: String {
             switch self {
-            case .ok: return "green"
-            case .revision: return "orange"
-            case .maintenance: return "red"
+            case .active: return "green"
+            case .inactive: return "gray"
+            case .maintenance: return "orange"
+            case .expired: return "red"
             }
         }
         
         var icon: String {
             switch self {
-            case .ok: return "checkmark.circle.fill"
-            case .revision: return "exclamationmark.triangle.fill"
+            case .active: return "checkmark.circle.fill"
+            case .inactive: return "pause.circle.fill"
             case .maintenance: return "wrench.fill"
+            case .expired: return "exclamationmark.triangle.fill"
             }
         }
-    }
-    
-    /// Actualiza el estado del kit
-    /// - Parameter newStatus: Nuevo estado
-    /// - Returns: Nueva instancia con el estado actualizado
-    func withStatus(_ newStatus: Status) -> KitFS {
-        var copy = self
-        copy.status = newStatus.rawValue
-        copy.updatedAt = Date()
-        return copy
-    }
-}
-
-// MARK: - Audit Management
-
-public extension KitFS {
-    /// Marca el kit como auditado ahora
-    /// - Returns: Nueva instancia con fecha de auditoría actualizada
-    func markAsAudited() -> KitFS {
-        var copy = self
-        copy.lastAudit = Date()
-        copy.updatedAt = Date()
-        return copy
-    }
-}
-
-// MARK: - Vehicle Assignment
-
-public extension KitFS {
-    /// Asigna el kit a un vehículo
-    /// - Parameter vehicleId: ID del vehículo (nil para desasignar)
-    /// - Returns: Nueva instancia con el vehículo asignado
-    func assignedTo(vehicle vehicleId: String?) -> KitFS {
-        var copy = self
-        copy.vehicleId = vehicleId
-        copy.updatedAt = Date()
-        return copy
-    }
-}
-
-// MARK: - Helper Methods
-
-public extension KitFS {
-    /// Crea una copia actualizada del kit
-    /// - Parameter updates: Closure para modificar propiedades
-    /// - Returns: Nueva instancia con cambios aplicados
-    func updated(_ updates: (inout KitFS) -> Void) -> KitFS {
-        var copy = self
-        copy.updatedAt = Date()
-        updates(&copy)
-        return copy
     }
 }
 
@@ -331,51 +144,98 @@ public extension KitFS {
     static let collectionName = "kits"
 }
 
-// MARK: - Sample Data (para previews y testing)
+// MARK: - Business Logic Helpers
 
-#if DEBUG
 public extension KitFS {
-    /// Kit de ejemplo: Ampulario SVA
-    static let sampleAmpulario = KitFS(
-        id: "kit_ampulario",
-        code: "AMPULARIO-SVA",
-        name: "Ampulario SVA",
-        type: .SVA,
-        status: "ok",
-        lastAudit: Date().addingTimeInterval(-86400 * 5), // 5 días atrás
-        vehicleId: "vehicle_sva_1",
-        itemIds: ["item_adrenaline", "item_midazolam"]
-    )
+    /// verificamos si un kit sta asignado a un vehiculo
+    var isAssigned: Bool {
+        vehicleId != nil
+    }
     
-    /// Kit de ejemplo: Kit Principal
-    static let samplePrincipal = KitFS(
-        id: "kit_principal",
-        code: "KIT-PRINCIPAL-001",
-        name: "Kit Principal SVA",
-        type: .SVA,
-        status: "ok",
-        lastAudit: Date().addingTimeInterval(-86400 * 2), // 2 días atrás
-        vehicleId: "vehicle_sva_1",
-        itemIds: ["item_gauze"]
-    )
+    /// Añade un item al kit
+    mutating func addItem(itemId: String) {
+        guard !itemIds.contains(itemId) else { return }
+        itemIds.append(itemId)
+        updatedAt = Date()
+    }
     
-    /// Kit de ejemplo sin asignar
-    static let sampleUnassigned = KitFS(
-        id: "kit_spare",
-        code: "KIT-RESERVA",
-        name: "Kit Reserva",
-        type: .custom,
-        status: "revision",
-        lastAudit: nil,
-        vehicleId: nil,
-        itemIds: []
-    )
+    /// Elimina un item del kit
+    mutating func removeItem(itemId: String) {
+        itemIds.removeAll { $0 == itemId }
+        updatedAt = Date()
+    }
     
-    /// Array de kits de ejemplo
-    static let samples: [KitFS] = [
-        sampleAmpulario,
-        samplePrincipal,
-        sampleUnassigned
-    ]
+    /// Verifica si un item está en el kit
+    func hasItem(itemId: String) -> Bool {
+        itemIds.contains(itemId)
+    }
+    
+    /// Número total de items en el kit
+    var itemCount: Int {
+        itemIds.count
+    }
+    
+    /// Asigna el kit a un vehículo
+    mutating func assignToVehicle(vehicleId: String) {
+        self.vehicleId = vehicleId
+        updatedAt = Date()
+    }
+    
+    /// Desasigna el kit de su vehículo actual
+    mutating func unassignFromVehicle() {
+        self.vehicleId = nil
+        updatedAt = Date()
+    }
+    
+    /// Actualiza el estado del kit
+    mutating func updateStatus(_ newStatus: Status) {
+        self.status = newStatus
+        updatedAt = Date()
+    }
+    
+    /// Registra una auditoría
+    mutating func performAudit() {
+        self.lastAudit = Date()
+        updatedAt = Date()
+    }
+    
+    /// Verifica si el kit necesita auditoría (más de 30 días)
+    var needsAudit: Bool {
+        guard let lastAudit = lastAudit else { return true }
+        let daysSinceAudit = Calendar.current.dateComponents([.day], from: lastAudit, to: Date()).day ?? 0
+        return daysSinceAudit > 30
+    }
+    
+    /// Verifica si el kit está operativo
+    var isOperational: Bool {
+        status == .active
+    }
 }
-#endif
+
+// MARK: - Validation
+
+public extension KitFS {
+    /// Valida que los datos del kit sean correctos
+    func validate() throws {
+        guard !code.isEmpty else {
+            throw ValidationError.emptyCode
+        }
+        guard !name.isEmpty else {
+            throw ValidationError.emptyName
+        }
+    }
+    
+    enum ValidationError: LocalizedError {
+        case emptyCode
+        case emptyName
+        
+        public var errorDescription: String? {
+            switch self {
+            case .emptyCode:
+                return "El código del kit no puede estar vacío"
+            case .emptyName:
+                return "El nombre del kit no puede estar vacío"
+            }
+        }
+    }
+}

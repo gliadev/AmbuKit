@@ -100,8 +100,8 @@ final class VehicleService: ObservableObject {
         // 4. Crear vehículo
         var vehicle = VehicleFS(
             code: code,
-            plate: plate,
-            type: type,
+            plate: plate ?? "",
+            type: VehicleFS.VehicleType(rawValue: type) ?? .ambulance,
             baseId: baseId
         )
         
@@ -440,7 +440,7 @@ final class VehicleService: ObservableObject {
         }
         
         // 3. Actualizar baseId
-        vehicle = vehicle.assignedTo(base: baseId)
+        vehicle.baseId = baseId
         
         // 4. Guardar cambios
         try await update(vehicle: vehicle, actor: actor)
@@ -588,7 +588,7 @@ extension VehicleService {
         let lowercased = searchText.lowercased()
         return allVehicles.filter {
             $0.code.lowercased().contains(lowercased) ||
-            ($0.plate?.lowercased().contains(lowercased) ?? false) ||
+            $0.plate.lowercased().contains(lowercased) ||
             $0.type.lowercased().contains(lowercased)
         }
     }

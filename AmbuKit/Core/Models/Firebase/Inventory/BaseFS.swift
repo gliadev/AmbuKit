@@ -11,7 +11,6 @@ import Combine
 
 /// Modelo de base médica para Firestore
 /// Representa una base desde donde operan las ambulancias
-/// Equivalente a Base.swift de SwiftData pero adaptado a Firebase
 public struct BaseFS: Codable, Identifiable, Sendable {
     
     // MARK: - Properties
@@ -40,12 +39,6 @@ public struct BaseFS: Codable, Identifiable, Sendable {
     /// Fecha de última actualización
     public var updatedAt: Date
     
-    // MARK: - Computed Properties (solo para UI)
-    
-    /// Vehículos cargados (deben obtenerse de Firestore)
-    /// Este campo NO se guarda en Firestore
-    public var vehicles: [VehicleFS] = []
-    
     // MARK: - Coding Keys
     
     public enum CodingKeys: String, CodingKey {
@@ -57,7 +50,6 @@ public struct BaseFS: Codable, Identifiable, Sendable {
         case vehicleIds
         case createdAt
         case updatedAt
-        // vehicles NO se codifica (es solo para UI)
     }
     
     // MARK: - Initialization
@@ -90,45 +82,76 @@ public extension BaseFS {
     static let collectionName = "bases"
 }
 
-// MARK: - Helpers
-
+// MARK: - Computed Properties
+    
 public extension BaseFS {
-    /// Crear BaseFS desde snapshot de Firestore
-    static func from(snapshot: DocumentSnapshot) throws -> BaseFS? {
-        try snapshot.data(as: BaseFS.self)
+    /// Verifica si la base tiene vehículos asignados
+    var hasVehicles: Bool {    
+        !vehicleIds.isEmpty
     }
     
-    /// Convertir a diccionario para Firestore
-    func toDictionary() throws -> [String: Any] {
-        let encoder = Firestore.Encoder()
-        return try encoder.encode(self)
+    /// Número total de vehículos en esta base
+    var vehicleCount: Int {
+        vehicleIds.count
+    }
+    
+    /// Texto descriptivo del número de vehículos
+    var vehicleCountText: String {
+        switch vehicleCount {
+        case 0: return "Sin vehículos"
+        case 1: return "1 vehículo"
+        default: return "\(vehicleCount) vehículos"
+        }
+    }
+    
+    /// Retorna una copia con updatedAt actualizado
+    var updated: BaseFS {
+        var copy = self
+        copy.updatedAt = Date()
+        return copy
     }
 }
 
-// MARK: - Business Logic Helpers
+// MARK: - Vehicle Management (Immutable Pattern)
 
 public extension BaseFS {
-    /// Añade un vehículo a la base
-    mutating func addVehicle(vehicleId: String) {
-        guard !vehicleIds.contains(vehicleId) else { return }
-        vehicleIds.append(vehicleId)
-        updatedAt = Date()
+    /// Retorna una copia con el vehículo añadido
+    func addingVehicle(vehicleId: String) -> BaseFS {
+        guard !vehicleIds.contains(vehicleId) else { return self }
+        var copy = self
+        copy.vehicleIds.append(vehicleId)
+        copy.updatedAt = Date()
+        return copy
     }
     
-    /// Elimina un vehículo de la base
-    mutating func removeVehicle(vehicleId: String) {
-        vehicleIds.removeAll { $0 == vehicleId }
-        updatedAt = Date()
+    /// Retorna una copia con el vehículo eliminado
+    func removingVehicle(vehicleId: String) -> BaseFS {
+        var copy = self
+        copy.vehicleIds.removeAll { $0 == vehicleId }
+        copy.updatedAt = Date()
+        return copy
     }
     
     /// Verifica si un vehículo pertenece a esta base
     func hasVehicle(vehicleId: String) -> Bool {
         vehicleIds.contains(vehicleId)
     }
+}
+
+// MARK: - Mutating Methods (Alternative)
+
+public extension BaseFS {
+    /// Añade un vehículo a la base (mutating)
+    mutating func addVehicle(vehicleId: String) {
+        guard !vehicleIds.contains(vehicleId) else { return }
+        vehicleIds.append(vehicleId)
+        updatedAt = Date()
+    }
     
-    /// Número total de vehículos en esta base
-    var vehicleCount: Int {
-        vehicleIds.count
+    /// Elimina un vehículo de la base (mutating)
+    mutating func removeVehicle(vehicleId: String) {
+        vehicleIds.removeAll { $0 == vehicleId }
+        updatedAt = Date()
     }
 }
 

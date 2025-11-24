@@ -81,8 +81,8 @@ final class KitService: ObservableObject {
         var kit = KitFS(
             code: code,
             name: name,
-            type: type,
-            status: status,
+            type: type.rawValue,
+            status: KitFS.Status( rawValue: status ) ?? .active,
             vehicleId: vehicleId
         )
         
