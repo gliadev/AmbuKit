@@ -59,16 +59,12 @@ Swift 6.0
 Cuenta de Firebase (plan Spark gratuito suficiente)
 
 Diagrama de Relaciones
-users ──┬── roles ──── policies
-        └── bases ──── vehicles ──── kits ──── kitItems
-                                                   │
-catalogItems ──┬── categories                      │
-               └── unitsOfMeasure ─────────────────┘
+<img width="1100" height="830" alt="5d405da8-15eb-413e-a3e1-35de002952b2" src="https://github.com/user-attachments/assets/c6c408fd-474f-4747-8aff-a433493806c9" />
+
 
 🔐 Sistema de Permisos
-RolUsuariosKitsItemsStockCatálogoProgramadorCRUDCRUDCRUDCRUDCRUDLogísticaRRUDCRUDCRUDRSanitarioRRRUR
+<img width="1050" height="714" alt="85c79282-6a30-4fd9-a82f-8ab8d8b83764" src="https://github.com/user-attachments/assets/db85e4bb-3762-4763-b271-b8a38b0d3062" />
 
-C = Create, R = Read, U = Update, D = Delete
 
 👨‍💻 Autor
 Adolfo Gómez
