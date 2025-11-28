@@ -1,6 +1,6 @@
 📚 Sobre el Proyecto
 Este proyecto forma parte del Trabajo Fin de Grado (TFG) del Ciclo Superior de Desarrollo de Aplicaciones Multiplataforma (DAM), curso 2024-2025.
-TitulaciónCFGS Desarrollo de Aplicaciones MultiplataformaMóduloProyecto Fin de GradoCurso2024-2025AutorAdolfo GómezFecha entregaEnero 2025
+Titulación CFGS Desarrollo de Aplicaciones Multiplataforma. MóduloProyecto Fin de GradoCurso 2022-2025
 
 📋 Descripción
 AmbuKit es una aplicación iOS nativa diseñada para la gestión integral de botiquines médicos en servicios de emergencias sanitarias.
