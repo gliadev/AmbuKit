@@ -5,6 +5,7 @@
 //  Created by Adolfo on 17/11/25.
 //
 
+
 import Foundation
 import FirebaseFirestore
 import Combine
@@ -45,7 +46,7 @@ final class VehicleService: ObservableObject {
     /// - Parameters:
     ///   - code: Código único del vehículo (ej: "AMB-001", "SVA-2401")
     ///   - plate: Matrícula del vehículo (opcional)
-    ///   - type: Tipo de vehículo (ej: "SVB Básica", "SVA Avanzada")
+    ///   - type: Tipo de vehículo (ej: "SVB", "SVA", "SVAe")
     ///   - baseId: ID de la base a la que se asigna (opcional)
     ///   - actor: Usuario que realiza la acción
     /// - Returns: VehicleFS creado
@@ -66,7 +67,7 @@ final class VehicleService: ObservableObject {
     /// let vehicle = try await VehicleService.shared.create(
     ///     code: "SVA-2401",
     ///     plate: "1234-ABC",
-    ///     type: "SVA Avanzada",
+    ///     type: "SVA",
     ///     baseId: "base_bilbao1",
     ///     actor: currentUser
     /// )
@@ -100,8 +101,8 @@ final class VehicleService: ObservableObject {
         // 4. Crear vehículo
         var vehicle = VehicleFS(
             code: code,
-            plate: plate ?? "",
-            type: VehicleFS.VehicleType(rawValue: type) ?? .ambulance,
+            plate: plate,
+            type: VehicleFS.VehicleType(rawValue: type) ?? .svb,  // ✅ Cambiado de .ambulance a .svb
             baseId: baseId
         )
         
@@ -250,25 +251,15 @@ final class VehicleService: ObservableObject {
     
     // MARK: - Query Operations
     
-    /// Obtiene un vehículo por su ID desde Firestore (con caché)
-    /// - Parameter id: ID del vehículo
+    /// Obtiene un vehículo por su ID
+    /// - Parameter id: ID del vehículo en Firestore
     /// - Returns: VehicleFS si existe, nil si no
-    ///
-    /// **Permisos:** No requiere permisos (lectura pública)
-    ///
-    /// - Example:
-    /// ```swift
-    /// if let vehicle = await VehicleService.shared.getVehicle(id: "vehicle_id") {
-    ///     print("Encontrado: \(vehicle.code)")
-    /// }
-    /// ```
     func getVehicle(id: String) async -> VehicleFS? {
-        // 1. Verificar cache
+        // Verificar cache primero
         if isCacheValid(), let cached = vehicleCache[id] {
             return cached
         }
         
-        // 2. Consultar Firestore
         do {
             let document = try await db.collection(VehicleFS.collectionName)
                 .document(id)
@@ -278,7 +269,7 @@ final class VehicleService: ObservableObject {
                 return nil
             }
             
-            // 3. Actualizar cache
+            // Actualizar cache
             vehicleCache[id] = vehicle
             return vehicle
             
@@ -288,16 +279,36 @@ final class VehicleService: ObservableObject {
         }
     }
     
-    /// Obtiene todos los vehículos desde Firestore
-    /// - Returns: Array de vehículos ordenados por código
-    ///
-    /// **Permisos:** No requiere permisos (lectura pública)
-    ///
-    /// - Example:
-    /// ```swift
-    /// let vehicles = await VehicleService.shared.getAllVehicles()
-    /// print("Total de vehículos: \(vehicles.count)")
-    /// ```
+    /// Obtiene un vehículo por su código único
+    /// - Parameter code: Código del vehículo (ej: "SVA-2401")
+    /// - Returns: VehicleFS si existe, nil si no
+    func getVehicleByCode(_ code: String) async -> VehicleFS? {
+        do {
+            let snapshot = try await db.collection(VehicleFS.collectionName)
+                .whereField("code", isEqualTo: code)
+                .limit(to: 1)
+                .getDocuments()
+            
+            guard let document = snapshot.documents.first,
+                  let vehicle = VehicleFS.from(snapshot: document) else {
+                return nil
+            }
+            
+            // Actualizar cache
+            if let id = vehicle.id {
+                vehicleCache[id] = vehicle
+            }
+            
+            return vehicle
+            
+        } catch {
+            print("❌ Error obteniendo vehículo por código '\(code)': \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    /// Obtiene todos los vehículos
+    /// - Returns: Array de todos los vehículos ordenados por código
     func getAllVehicles() async -> [VehicleFS] {
         do {
             let snapshot = try await db.collection(VehicleFS.collectionName)
@@ -324,17 +335,9 @@ final class VehicleService: ObservableObject {
         }
     }
     
-    /// Obtiene vehículos asignados a una base específica
+    /// Obtiene vehículos de una base específica
     /// - Parameter baseId: ID de la base
-    /// - Returns: Array de vehículos de esa base
-    ///
-    /// **Permisos:** No requiere permisos (lectura pública)
-    ///
-    /// - Example:
-    /// ```swift
-    /// let vehicles = await VehicleService.shared.getVehiclesByBase(baseId: "base_bilbao1")
-    /// print("Vehículos en Bilbao 1: \(vehicles.count)")
-    /// ```
+    /// - Returns: Array de vehículos asignados a esa base
     func getVehiclesByBase(baseId: String) async -> [VehicleFS] {
         do {
             let snapshot = try await db.collection(VehicleFS.collectionName)
@@ -361,51 +364,14 @@ final class VehicleService: ObservableObject {
         }
     }
     
-    /// Obtiene un vehículo por su código único
-    /// - Parameter code: Código del vehículo (ej: "SVA-2401")
-    /// - Returns: VehicleFS si existe, nil si no
-    ///
-    /// **Permisos:** No requiere permisos (lectura pública)
-    ///
-    /// - Example:
-    /// ```swift
-    /// if let vehicle = await VehicleService.shared.getVehicleByCode("SVA-2401") {
-    ///     print("Encontrado: \(vehicle.displayName)")
-    /// }
-    /// ```
-    func getVehicleByCode(_ code: String) async -> VehicleFS? {
-        do {
-            let snapshot = try await db.collection(VehicleFS.collectionName)
-                .whereField("code", isEqualTo: code)
-                .limit(to: 1)
-                .getDocuments()
-            
-            guard let document = snapshot.documents.first,
-                  let vehicle = VehicleFS.from(snapshot: document) else {
-                return nil
-            }
-            
-            // Actualizar cache
-            if let id = vehicle.id {
-                vehicleCache[id] = vehicle
-            }
-            
-            return vehicle
-            
-        } catch {
-            print("❌ Error obteniendo vehículo por código '\(code)': \(error.localizedDescription)")
-            return nil
-        }
-    }
-    
-    // MARK: - Helper Operations
+    // MARK: - Assignment Operations
     
     /// Asigna o desasigna un vehículo a una base
     /// - Parameters:
     ///   - vehicleId: ID del vehículo
     ///   - baseId: ID de la base (nil para desasignar)
     ///   - actor: Usuario que realiza la acción
-    /// - Throws: VehicleServiceError si hay problemas de permisos o el vehículo no existe
+    /// - Throws: VehicleServiceError si hay problemas
     ///
     /// **Permisos requeridos:**
     /// - Programador: ✅ Permitido
@@ -417,7 +383,7 @@ final class VehicleService: ObservableObject {
     /// // Asignar a base
     /// try await VehicleService.shared.assignToBase(
     ///     vehicleId: "vehicle_id",
-    ///     baseId: "base_bilbao1",
+    ///     baseId: "base_id",
     ///     actor: currentUser
     /// )
     ///
@@ -588,23 +554,30 @@ extension VehicleService {
         let lowercased = searchText.lowercased()
         return allVehicles.filter {
             $0.code.lowercased().contains(lowercased) ||
-            $0.plate.lowercased().contains(lowercased) ||
+            ($0.plate?.lowercased().contains(lowercased) ?? false) ||  // ✅ Corregido: plate es opcional
             $0.type.lowercased().contains(lowercased)
         }
     }
     
     /// Obtiene vehículos por tipo
-    /// - Parameter type: Tipo de vehículo (ej: "SVA Avanzada")
+    /// - Parameter type: Tipo de vehículo (ej: "SVA", "SVB")
     /// - Returns: Array de vehículos de ese tipo
     ///
     /// - Example:
     /// ```swift
-    /// let svaVehicles = await VehicleService.shared.getVehiclesByType("SVA Avanzada")
+    /// let svaVehicles = await VehicleService.shared.getVehiclesByType("SVA")
     /// print("SVA: \(svaVehicles.count)")
     /// ```
     func getVehiclesByType(_ type: String) async -> [VehicleFS] {
         let allVehicles = await getAllVehicles()
         return allVehicles.filter { $0.type == type }
+    }
+    
+    /// Obtiene vehículos por tipo usando el enum
+    /// - Parameter type: Tipo de vehículo como enum
+    /// - Returns: Array de vehículos de ese tipo
+    func getVehiclesByType(_ type: VehicleFS.VehicleType) async -> [VehicleFS] {
+        await getVehiclesByType(type.rawValue)
     }
 }
 
@@ -632,44 +605,3 @@ extension VehicleService {
     }
 }
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -142,12 +142,17 @@ final class UserService {
             return user
             
         } catch {
-            // Si falla Firestore, eliminar el usuario de Auth
-            try? await auth.currentUser?.delete()
+            // Si falla Firestore, eliminar el usuario de Auth (best-effort)
+            if let user = auth.currentUser {
+                user.delete { error in
+                    if let error = error {
+                        print("⚠️ No se pudo eliminar el usuario de Auth tras fallo en Firestore: \(error.localizedDescription)")
+                    }
+                }
+            }
             throw UserServiceError.firestoreError(error)
         }
     }
-    
     // MARK: - Read
     
     /// Obtiene un usuario por su ID de Firestore (con caché)
@@ -667,4 +672,7 @@ extension UserService {
         }
     }
 }
+
 #endif
+
+

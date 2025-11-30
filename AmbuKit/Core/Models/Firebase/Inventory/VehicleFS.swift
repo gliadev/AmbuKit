@@ -24,7 +24,7 @@ public struct VehicleFS: Codable, Identifiable, Sendable {
     public let code: String
     
     /// Matrícula del vehículo
-    public let plate: String
+    public let plate: String?
     
     /// Tipo de vehículo (almacenado como String)
     public let type: String
@@ -45,7 +45,7 @@ public struct VehicleFS: Codable, Identifiable, Sendable {
     
     /// Tipo de vehículo como enum
     public var vehicleType: VehicleType {
-        VehicleType(rawValue: type) ?? .ambulance
+        VehicleType(rawValue: type) ?? .svb
     }
     
     /// Base cargada (debe obtenerse de Firestore)
@@ -75,8 +75,8 @@ public struct VehicleFS: Codable, Identifiable, Sendable {
     public init(
         id: String? = nil,
         code: String,
-        plate: String,
-        type: VehicleType = .ambulance,
+        plate: String? = nil,
+        type: VehicleType = .svb,
         baseId: String? = nil,
         kitIds: [String] = [],
         createdAt: Date = Date(),
@@ -96,30 +96,87 @@ public struct VehicleFS: Codable, Identifiable, Sendable {
 // MARK: - VehicleType Enum
 
 public extension VehicleFS {
+    /// Tipos de vehículos de emergencias sanitarias en España
     enum VehicleType: String, Codable, CaseIterable, Sendable {
-        case ambulance = "ambulance"
-        case van = "van"
-        case car = "car"
-        case motorcycle = "motorcycle"
-        case helicopter = "helicopter"
+        /// Soporte Vital Básico - Ambulancia convencional
+        case svb = "SVB"
         
+        /// Soporte Vital Avanzado - Ambulancia medicalizada
+        case sva = "SVA"
+        
+        /// Soporte Vital Avanzado Enfermería - Ambulancia con enfermero
+        case svae = "SVAe"
+        
+        /// Transporte Sanitario No Urgente
+        case tsnu = "TSNU"
+        
+        /// Vehículo de Intervención Rápida
+        case vir = "VIR"
+        
+        /// Helicóptero sanitario
+        case helicopter = "HELI"
+        
+        /// Nombre para mostrar en UI
         var displayName: String {
             switch self {
-            case .ambulance: return "Ambulancia"
-            case .van: return "Furgoneta"
-            case .car: return "Coche"
-            case .motorcycle: return "Motocicleta"
-            case .helicopter: return "Helicóptero"
+            case .svb: return "SVB - Soporte Vital Básico"
+            case .sva: return "SVA - Soporte Vital Avanzado"
+            case .svae: return "SVAe - SVA Enfermería"
+            case .tsnu: return "TSNU - Transporte No Urgente"
+            case .vir: return "VIR - Vehículo Intervención Rápida"
+            case .helicopter: return "Helicóptero Sanitario"
             }
         }
         
+        /// Nombre corto para listas
+        var shortName: String {
+            switch self {
+            case .svb: return "SVB"
+            case .sva: return "SVA"
+            case .svae: return "SVAe"
+            case .tsnu: return "TSNU"
+            case .vir: return "VIR"
+            case .helicopter: return "HELI"
+            }
+        }
+        
+        /// Icono SF Symbol
         var icon: String {
             switch self {
-            case .ambulance: return "cross.case.fill"
-            case .van: return "car.fill"
-            case .car: return "car"
-            case .motorcycle: return "bicycle"
+            case .svb: return "cross.case"
+            case .sva: return "cross.case.fill"
+            case .svae: return "cross.case.fill"
+            case .tsnu: return "car.side"
+            case .vir: return "car.fill"
             case .helicopter: return "airplane"
+            }
+        }
+        
+        /// Color asociado (para UI)
+        var colorName: String {
+            switch self {
+            case .svb: return "blue"
+            case .sva: return "red"
+            case .svae: return "orange"
+            case .tsnu: return "green"
+            case .vir: return "purple"
+            case .helicopter: return "yellow"
+            }
+        }
+        
+        /// Indica si requiere médico a bordo
+        var requiresDoctor: Bool {
+            switch self {
+            case .sva: return true
+            default: return false
+            }
+        }
+        
+        /// Indica si requiere enfermero a bordo
+        var requiresNurse: Bool {
+            switch self {
+            case .sva, .svae: return true
+            default: return false
             }
         }
     }
@@ -132,8 +189,20 @@ public extension VehicleFS {
     static let collectionName = "vehicles"
 }
 
+// MARK: - Firestore Helpers
 
-// MARK: - Business Logic Helpers
+public extension VehicleFS {
+    /// Crear VehicleFS desde snapshot de Firestore
+    static func from(snapshot: DocumentSnapshot) -> VehicleFS? {
+        try? snapshot.data(as: VehicleFS.self)
+    }
+    
+    /// Convertir a diccionario para Firestore
+    func toDictionary() throws -> [String: Any] {
+        let encoder = Firestore.Encoder()
+        return try encoder.encode(self)
+    }
+}  // ✅ Esta llave faltaba
 
 // MARK: - Computed Properties (for Services)
 
@@ -153,6 +222,8 @@ public extension VehicleFS {
         baseId
     }
 }
+
+// MARK: - Mutating Methods
 
 public extension VehicleFS {
     /// Añade un kit al vehículo
@@ -199,9 +270,7 @@ public extension VehicleFS {
         guard !code.isEmpty else {
             throw ValidationError.emptyCode
         }
-        guard !plate.isEmpty else {
-            throw ValidationError.emptyPlate
-        }
+        // Matrícula es opcional, no validamos
     }
     
     enum ValidationError: LocalizedError {
@@ -218,3 +287,46 @@ public extension VehicleFS {
         }
     }
 }
+
+// MARK: - Equatable
+
+extension VehicleFS: Equatable {
+    public static func == (lhs: VehicleFS, rhs: VehicleFS) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.code == rhs.code &&
+        lhs.plate == rhs.plate &&
+        lhs.type == rhs.type &&
+        lhs.baseId == rhs.baseId &&
+        lhs.kitIds == rhs.kitIds
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

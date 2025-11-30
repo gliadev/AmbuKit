@@ -10,16 +10,6 @@ import FirebaseFirestore
 
 // MARK: - VehicleFS Extensions
 
-public extension VehicleFS {
-    /// Crea un VehicleFS desde un DocumentSnapshot de Firestore
-    /// - Parameter snapshot: DocumentSnapshot de Firestore
-    /// - Returns: VehicleFS si se puede decodificar, nil si no
-    static func from(snapshot: DocumentSnapshot) -> VehicleFS? {
-        guard snapshot.exists else { return nil }
-        return try? snapshot.data(as: VehicleFS.self)
-    }
-}
-
 // MARK: - KitFS Extensions
 
 public extension KitFS {

@@ -210,7 +210,13 @@ final class AuthorizationServiceFSTests: XCTestCase {
     
     /// Verifica que Sanitario NO tiene acceso a usuarios
     func testSanitaryCannotAccessUsers() async throws {
-        let sanitary = try await createTestUser(role: .sanitary)
+        let sanitary = UserFS(
+            uid: "test-uid",
+            username: "test",
+            fullName: "Test User",
+            email: "test@test.com",
+            roleId: nil
+        )
         
         let permissions = await AuthorizationServiceFS.permissions(for: .user, user: sanitary)
         
@@ -244,13 +250,13 @@ final class AuthorizationServiceFSTests: XCTestCase {
     
     /// Verifica que usuario sin rol no tiene permisos
     func testUserWithoutRoleHasNoPermissions() async {
-        var user = UserFS(
+        let user = UserFS(
             uid: "test-uid",
             username: "test",
             fullName: "Test User",
-            email: "test@test.com"
+            email: "test@test.com",
+            roleId: nil
         )
-        user.roleId = nil // Sin rol
         
         let hasPermission = await AuthorizationServiceFS.allowed(
             .read,
@@ -263,13 +269,13 @@ final class AuthorizationServiceFSTests: XCTestCase {
     
     /// Verifica que usuario con rol inválido no tiene permisos
     func testUserWithInvalidRoleHasNoPermissions() async {
-        var user = UserFS(
+        let user = UserFS(
             uid: "test-uid",
             username: "test",
             fullName: "Test User",
-            email: "test@test.com"
+            email: "test@test.com",
+            roleId: "invalid-role-id"
         )
-        user.roleId = "invalid-role-id"
         
         let hasPermission = await AuthorizationServiceFS.allowed(
             .read,
@@ -410,11 +416,12 @@ final class AuthorizationServiceFSTests: XCTestCase {
         // Crear rol y policies en Firestore de testing
         
         // OPCIÓN 2: Mock simple para tests
-        var user = UserFS(
+        let user = UserFS(
             uid: "test-\(role.rawValue)",
             username: "test-\(role.rawValue)",
             fullName: "Test \(role.rawValue.capitalized)",
-            email: "test-\(role.rawValue)@test.com"
+            email: "test-\(role.rawValue)@test.com",
+            roleId: "test-role-\(role.rawValue)"
         )
         
         // Aquí necesitas crear el rol y policies en Firestore de testing
@@ -422,8 +429,6 @@ final class AuthorizationServiceFSTests: XCTestCase {
         
         // Por ahora, retornamos un usuario básico
         // Ajusta esto según tu configuración de testing
-        user.roleId = "test-role-\(role.rawValue)"
-        
         return user
     }
 }
@@ -459,13 +464,13 @@ final class AuthorizationServiceFSIntegrationTests: XCTestCase {
         )
         
         // 3. Crear usuario con este rol
-        var user = UserFS(
+        let user = UserFS(
             uid: "integration-test-user",
             username: "test-logistics",
             fullName: "Test Logistics User",
-            email: "test@logistics.com"
+            email: "test@logistics.com",
+            roleId: roleId
         )
-        user.roleId = roleId
         
         // 4. Verificar permisos
         let canCreate = await AuthorizationServiceFS.allowed(.create, on: .kit, for: user)
@@ -506,6 +511,7 @@ final class AuthorizationServiceFSPerformanceTests: XCTestCase {
         }
     }
 }
+
 
 
 

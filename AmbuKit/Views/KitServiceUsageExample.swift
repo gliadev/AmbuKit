@@ -8,19 +8,6 @@
 
 import SwiftUI
 
-// MARK: - KitType Extension
-
-extension KitType {
-    var displayName: String {
-        switch self {
-        case .SVB: return "SVB"
-        case .SVAe: return "SVAe"
-        case .SVA: return "SVA"
-        case .custom: return "Personalizado"
-        }
-    }
-}
-
 // MARK: - Main View
 
 struct KitServiceUsageExampleView: View {
@@ -135,15 +122,16 @@ struct KitListRow: View {
                 
                 Spacer()
                 
-                Image(systemName: kit.statusIcon)
-                    .foregroundColor(colorForStatus(kit.status))
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
             }
             
             Text(kit.name)
                 .font(.headline)
             
             HStack {
-                Text(kit.type.displayName)
+                // kit.type es String, usarlo directamente
+                Text(kit.type)
                     .font(.caption)
                     .foregroundColor(.blue)
                 
@@ -156,16 +144,7 @@ struct KitListRow: View {
         }
         .padding(.vertical, 4)
     }
-    
-    private func colorForStatus(_ status: String) -> Color {
-        switch status.lowercased() {
-        case "ok": return .green
-        case "revision": return .orange
-        case "mantenimiento": return .red
-        default: return .gray
-        }
-    }
-}
+}  // ← ESTA LLAVE FALTABA
 
 // MARK: - Kit Details Screen
 
@@ -180,8 +159,10 @@ struct KitDetailsScreen: View {
         List {
             Section("Información") {
                 LabeledContent("Código", value: kit.code)
-                LabeledContent("Tipo", value: kit.type.displayName)
-                LabeledContent("Estado", value: kit.status)
+                // kit.type es String, usarlo directamente
+                LabeledContent("Tipo", value: kit.type)
+                // kit.status - convertir a String si es enum
+                LabeledContent("Estado", value: "\(kit.status)")
                 
                 if let audit = kit.lastAudit {
                     LabeledContent("Última auditoría") {
@@ -294,7 +275,7 @@ struct CreateKitSheet: View {
                 
                 Picker("Tipo", selection: $selectedType) {
                     ForEach(KitType.allCases) { type in
-                        Text(type.displayName).tag(type)
+                        Text(type.rawValue).tag(type)
                     }
                 }
             }
@@ -493,43 +474,3 @@ struct StatisticRow: View {
 #Preview {
     KitServiceUsageExampleView()
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

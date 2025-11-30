@@ -8,5 +8,7 @@
 import Foundation
 
 
-public enum EntityKind: String, Codable, CaseIterable { case base, vehicle, kit, catalogItem, kitItem, user, category, unit, audit }
+public enum EntityKind: String, Codable, CaseIterable, Sendable {
+    case base, vehicle, kit, catalogItem, kitItem, user, category, unit, audit
+}
 

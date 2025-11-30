@@ -224,7 +224,7 @@ final class VehicleServiceTests: XCTestCase {
     
     func testUpdateVehicle_Success() async throws {
         // Given: Vehículo existente
-        var vehicle = try await service.create(
+        let vehicle = try await service.create(
             code: "TEST-UPD-001",
             plate: "1111-AAA",
             type: "SVA",
@@ -232,9 +232,15 @@ final class VehicleServiceTests: XCTestCase {
         )
         
         // When: Actualizar matrícula
-        vehicle.plate = "2222-BBB"
-        try await service.update(vehicle: vehicle, actor: testProgrammerUser)
-        
+        // Crear copia actualizada sin mutar el original (plate es let)
+        let updatedVehicle = VehicleFS(
+            id: vehicle.id,
+            code: vehicle.code,
+            plate: "2222-BBB",
+            type: VehicleFS.VehicleType(rawValue: vehicle.type) ?? .ambulance,  // ✅ .ambulance
+            baseId: vehicle.baseId
+        )
+        try await service.update(vehicle: updatedVehicle, actor: testProgrammerUser)
         // Then: Vehículo actualizado
         let updated = await service.getVehicle(id: vehicle.id!)
         XCTAssertEqual(updated?.plate, "2222-BBB")
@@ -349,3 +355,4 @@ final class VehicleServiceTests: XCTestCase {
         XCTAssertEqual(updated?.baseId, baseId)
     }
 }
+

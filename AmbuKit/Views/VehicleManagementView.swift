@@ -5,7 +5,6 @@
 //  Created by Adolfo on 17/11/25.
 //  Ejemplo completo de cómo usar VehicleService desde SwiftUI
 
-
 import SwiftUI
 
 /// Vista de ejemplo que demuestra el uso de VehicleService
@@ -238,7 +237,7 @@ struct VehicleRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: vehicle.typeIcon)
+                Image(systemName: "ambulance.fill")
                     .foregroundStyle(.blue)
                 
                 Text(vehicle.code)
@@ -246,7 +245,7 @@ struct VehicleRow: View {
                 
                 Spacer()
                 
-                if let plate = vehicle.plate {
+                if let plate = vehicle.plate, !plate.isEmpty {
                     Text(plate)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -267,13 +266,18 @@ struct VehicleRow: View {
                 
                 Spacer()
                 
-                Text(vehicle.kitCountText)
+                // Eliminado vehicle.kitCountText - no existe en VehicleFS
+                Text("\(vehicle.kitIds.count) kits")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
     }
+}
+
+#Preview {
+    VehicleManagementView()
 }
 
 /*
