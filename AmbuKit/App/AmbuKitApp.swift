@@ -6,6 +6,7 @@
 //  Updated by Claude on 16/11/25 - TAREA 2: Autenticación
 //
 
+
 import SwiftUI
 import SwiftData
 import FirebaseCore
@@ -13,15 +14,16 @@ import FirebaseCore
 @main
 struct AmbuKitApp: App {
     
-    // MARK: - App State
+    // MARK: - App State (Firebase)
     
     @StateObject private var appState = AppState.shared
     
-    // MARK: - SwiftData (Temporal - se eliminará después)
+    // MARK: - SwiftData Container (Temporal - se elimina en TAREA 17)
     
+    /// ModelContainer para compatibilidad con vistas existentes
+    /// TODO: Eliminar cuando todas las vistas usen Firebase
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            // Entities actuales de SwiftData
             User.self,
             Role.self,
             Policy.self,
@@ -69,23 +71,7 @@ struct AmbuKitApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(appState)
-                .modelContainer(sharedModelContainer) // Temporal - hasta migración completa
+                .modelContainer(sharedModelContainer) // Temporal para bridge
         }
     }
 }
-
-// MARK: - App Delegate (Opcional - para notificaciones futuras)
-
-#if canImport(UIKit)
-import UIKit
-
-class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(
-        _ application: UIApplication,
-        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
-    ) -> Bool {
-        // Configuraciones adicionales aquí
-        return true
-    }
-}
-#endif

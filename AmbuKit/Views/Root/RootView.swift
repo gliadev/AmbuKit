@@ -8,15 +8,20 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Root View (Actualizado para Firebase)
+// MARK: - Root View (100% Firebase)
 
+/// Vista raíz que maneja el flujo de autenticación
+/// - Loading: Muestra splash mientras inicializa
+/// - No autenticado: Muestra LoginView
+/// - Autenticado: Muestra MainTabScreen con UserFS
 struct RootView: View {
     
     // MARK: - Environment
+    
     @EnvironmentObject private var appState: AppState
-    @Environment(\.modelContext) private var context
     
     // MARK: - State
+    
     @State private var isInitialized = false
     
     // MARK: - Body
@@ -24,19 +29,21 @@ struct RootView: View {
     var body: some View {
         Group {
             if !isInitialized {
-                // Splash screen mientras inicializa
+                // Estado 1: Splash mientras inicializa
                 splashScreen
             } else if appState.isLoadingUser {
-                // Loading mientras carga usuario de Firestore
+                // Estado 2: Cargando usuario de Firestore
                 loadingScreen
             } else if appState.isAuthenticated, let user = appState.currentUser {
-                // Usuario autenticado → MainTabView
-                MainTabViewFS(currentUser: user)
+                // Estado 3: Autenticado → MainTabScreen (Firebase)
+                MainTabView(currentUser: user)
             } else {
-                // No autenticado → LoginView
+                // Estado 4: No autenticado → Login
                 LoginView()
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: isInitialized)
+        .animation(.easeInOut(duration: 0.3), value: appState.isAuthenticated)
         .task {
             await initialize()
         }
@@ -57,6 +64,8 @@ struct RootView: View {
             ProgressView()
                 .tint(.blue)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
     
     // MARK: - Loading Screen
@@ -70,71 +79,34 @@ struct RootView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
     
     // MARK: - Initialization
     
     private func initialize() async {
-        // Ejecutar seed data de SwiftData (temporal)
-        try? SeedDataLoader.runIfNeeded(context: context)
+        // Pequeño delay para mostrar splash (mejor UX)
+        try? await Task.sleep(for: .milliseconds(800))
         
-        // Pequeño delay para mostrar splash
-        try? await Task.sleep(for: .milliseconds(500))
-        
-        isInitialized = true
-    }
-}
-
-// MARK: - MainTabView Wrapper (Bridge entre SwiftData y Firebase)
-
-/// Versión temporal de MainTabView que convierte UserFS → User
-/// Esto permite que las vistas existentes sigan funcionando
-/// TODO: Eliminar cuando todas las vistas usen UserFS
-struct MainTabViewFS: View {
-    let currentUser: UserFS
-    @Environment(\.modelContext) private var context
-    @State private var swiftDataUser: User?
-    
-    var body: some View {
-        Group {
-            if let sdUser = swiftDataUser {
-                // Usar MainTabView existente con User de SwiftData
-                MainTabView(currentUser: sdUser)
-            } else {
-                // Loading mientras busca usuario en SwiftData
-                ProgressView("Cargando perfil...")
-            }
-        }
-        .task {
-            await loadSwiftDataUser()
-        }
-    }
-    
-    private func loadSwiftDataUser() async {
-        // Buscar usuario en SwiftData por username
-        let usernameToFind = currentUser.username
-        let descriptor = FetchDescriptor<User>(
-            predicate: #Predicate { $0.username == usernameToFind }
-            )
-        
-        swiftDataUser = try? context.fetch(descriptor).first
-        
-        // Si no existe, podemos crear uno temporal
-        if swiftDataUser == nil {
-            print("⚠️ Usuario no encontrado en SwiftData, usando datos de Firebase")
-            // TODO: Aquí podrías crear un User temporal o mostrar error
+        withAnimation {
+            isInitialized = true
         }
     }
 }
 
 // MARK: - Preview
 
-#Preview("Root - Not Authenticated") {
+#Preview("Root - Loading") {
     RootView()
         .environmentObject(AppState.shared)
-        .modelContainer(PreviewSupport.container)
 }
 
+#Preview("Root - Login") {
+    let state = AppState.shared
+    return RootView()
+        .environmentObject(state)
+}
 
 
 
