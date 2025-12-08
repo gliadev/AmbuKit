@@ -2,7 +2,7 @@
 //  UserService.swift
 //  AmbuKit
 //
-//  Created by Claude on 16/11/25.
+//  
 //
 
 import Foundation

@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Root View (100% Firebase)
 
@@ -36,7 +35,7 @@ struct RootView: View {
                 loadingScreen
             } else if appState.isAuthenticated, let user = appState.currentUser {
                 // Estado 3: Autenticado → MainTabScreen (Firebase)
-                MainTabView(currentUser: user)
+                MainTabScreen(currentUser: user)
             } else {
                 // Estado 4: No autenticado → Login
                 LoginView()
@@ -107,9 +106,3 @@ struct RootView: View {
     return RootView()
         .environmentObject(state)
 }
-
-
-
-
-
-

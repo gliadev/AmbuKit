@@ -3,7 +3,7 @@
 //  AmbuKit
 //
 //  Created by Adolfo on 10/11/25.
-//  Updated by Claude on 16/11/25 - TAREA 2: Autenticación
+//  
 //
 
 
@@ -75,3 +75,18 @@ struct AmbuKitApp: App {
         }
     }
 }
+
+// MARK: - App Delegate (Opcional - para notificaciones futuras)
+
+#if canImport(UIKit)
+import UIKit
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
+    ) -> Bool {
+        return true
+    }
+}
+#endif
