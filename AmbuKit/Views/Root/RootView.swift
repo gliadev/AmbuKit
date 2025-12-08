@@ -35,7 +35,7 @@ struct RootView: View {
                 loadingScreen
             } else if appState.isAuthenticated, let user = appState.currentUser {
                 // Estado 3: Autenticado → MainTabScreen (Firebase)
-                MainTabScreen(currentUser: user)
+                MainTabView(currentUser: user)
             } else {
                 // Estado 4: No autenticado → Login
                 LoginView()

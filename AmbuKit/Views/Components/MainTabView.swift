@@ -5,8 +5,10 @@
 //  Created by Adolfo on 12/11/25.
 //
 
+
 import SwiftUI
-import SwiftData 
+import SwiftData
+
 // MARK: - MainTabView
 
 /// Vista principal con tabs - Versión Firebase
@@ -167,10 +169,7 @@ struct MainTabView: View {
     
     /// Busca el usuario equivalente en SwiftData
     /// TODO: Eliminar cuando las vistas hijas migren a Firebase (TAREAS 12-14)
-    // Busca el usuario equivalente en SwiftData
-    /// TODO: Eliminar cuando las vistas hijas migren a Firebase (TAREAS 12-14)
     private func loadSwiftDataUser() async {
-        // Buscar por username (única propiedad compartida entre User y UserFS)
         let username = currentUser.username
         let descriptor = FetchDescriptor<User>(
             predicate: #Predicate { $0.username == username }
@@ -188,22 +187,6 @@ struct MainTabView: View {
         }
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-#Preview("MainTab - Firebase User") {
-    let firebaseUser = UserFS(
-        id: "preview-id",
-        uid: "preview-uid",
-        username: "programmer",
-        fullName: "Admin User",
-        email: "admin@ambukit.com",
-        roleId: "role-programmer"
-    )
-    
-    return MainTabView(currentUser: firebaseUser)
-        .modelContainer(PreviewSupport.container)
-        .environmentObject(AppState.shared)
-}
-#endif
+    // MARK: - Preview
+    // MARK: - Preview
+    // TODO: Añadir previews cuando el puente esté estable
