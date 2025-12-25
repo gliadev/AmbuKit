@@ -7,38 +7,33 @@
 
 
 import SwiftUI
-import SwiftData
 
-// MARK: - MainTabView
-
-/// Vista principal con tabs - Versión Firebase
+/// Vista principal con tabs para usuarios autenticados
 ///
-/// Recibe UserFS de Firebase, verifica permisos async con AuthorizationServiceFS,
-/// y pasa User (SwiftData) a las vistas hijas hasta que se migren en TAREAS 12-14.
+/// **Estado de Migración (TAREA 14 completada):**
+/// - ✅ InventoryView: Usa UserFS (Firebase)
+/// - ✅ AdminView: Usa UserFS (Firebase)
+/// - ✅ ProfileView: Usa UserFS (Firebase)
 struct MainTabView: View {
     
     // MARK: - Properties
     
-    /// Usuario actual de Firebase
-    let currentUser: UserFS
-    
-    // MARK: - State
-    
-    /// Cache de permisos para tabs
-    @State private var canAccessAdmin = false
-    
-    /// RoleKind del usuario (para colores)
-    @State private var roleKind: RoleKind? = nil
-    
-    /// Estado de carga de permisos
-    @State private var isLoadingPermissions = true
-    
-    /// Usuario de SwiftData (puente temporal)
-    @State private var bridgedUser: User? = nil
+    let currentUser: UserFS  // ✅ Firebase (NO User SwiftData)
     
     // MARK: - Environment
     
-    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var appState: AppState
+    
+    // MARK: - State
+    
+    /// Usuario enriquecido con datos relacionados (role, base)
+    @State private var enrichedUser: UserFS?
+    
+    /// Mostrar tab de administración
+    @State private var showAdminTab = false
+    
+    /// Estado de carga de permisos
+    @State private var isLoadingPermissions = true
     
     // MARK: - Body
     
@@ -46,14 +41,12 @@ struct MainTabView: View {
         Group {
             if isLoadingPermissions {
                 loadingView
-            } else if let user = bridgedUser {
-                mainTabView(user: user)
             } else {
-                userNotFoundView
+                mainTabContent
             }
         }
         .task {
-            await loadInitialData()
+            await setup()
         }
     }
     
@@ -62,9 +55,8 @@ struct MainTabView: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .scaleEffect(1.2)
-            
-            Text("Cargando permisos...")
+                .tint(.blue)
+            Text("Preparando interfaz...")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -72,121 +64,160 @@ struct MainTabView: View {
         .background(Color(.systemGroupedBackground))
     }
     
-    // MARK: - Main Tab View
+    // MARK: - Main Tab Content
     
     @ViewBuilder
-    private func mainTabView(user: User) -> some View {
+    private var mainTabContent: some View {
+        let user = enrichedUser ?? currentUser
+        
         TabView {
-            // Tab 1: Inventario (todos los roles)
+            // Tab: Inventario - ✅ UserFS
             InventoryView(currentUser: user)
                 .tabItem {
                     Label("Inventario", systemImage: "shippingbox")
                 }
             
-            // Tab 2: Gestión (solo Programador y Logística)
-            if canAccessAdmin {
+            // Tab: Gestión - ✅ UserFS
+            if showAdminTab {
                 AdminView(currentUser: user)
                     .tabItem {
                         Label("Gestión", systemImage: "gearshape")
                     }
             }
             
-            // Tab 3: Perfil (todos los roles)
+            // Tab: Perfil - ✅ UserFS (TAREA 14)
             ProfileView(currentUser: user)
                 .tabItem {
                     Label("Perfil", systemImage: "person")
                 }
         }
-        .tint(accentColor)
     }
     
-    // MARK: - User Not Found View
+    // MARK: - Setup
     
-    private var userNotFoundView: some View {
-        ContentUnavailableView {
-            Label("Usuario no sincronizado",
-                  systemImage: "person.crop.circle.badge.exclamationmark")
-        } description: {
-            Text("No se encontró el usuario '\(currentUser.username)' en la base de datos local. Esto puede ocurrir si los datos no están sincronizados.")
-        } actions: {
-            Button("Reintentar") {
-                Task {
-                    await loadInitialData()
-                }
-            }
-            .buttonStyle(.borderedProminent)
-        }
-    }
-    
-    // MARK: - Accent Color
-    
-    private var accentColor: Color {
-        switch roleKind {
-        case .programmer: return .blue
-        case .logistics: return .orange
-        case .sanitary: return .green
-        case .none: return .blue
-        }
-    }
-    
-    // MARK: - Load Initial Data
-    
-    private func loadInitialData() async {
+    private func setup() async {
         isLoadingPermissions = true
         
-        // Ejecutar todas las cargas en paralelo
-        async let permissionsTask: Void = loadPermissions()
-        async let userTask: Void = loadSwiftDataUser()
+        // 1. Cargar datos relacionados (role, base)
+        await loadRelatedData()
         
-        // Esperar ambas tareas
-        _ = await (permissionsTask, userTask)
+        // 2. Calcular permisos
+        await loadPermissions()
         
         isLoadingPermissions = false
+    }
+    
+    // MARK: - Load Related Data
+    
+    private func loadRelatedData() async {
+        var user = currentUser
+        
+        // Cargar Role si tiene roleId
+        if let roleId = currentUser.roleId {
+            if let role = await PolicyService.shared.getRole(id: roleId) {
+                user.role = role
+                #if DEBUG
+                print("📋 Role cargado: \(role.displayName)")
+                #endif
+            }
+        }
+        
+        // Cargar Base si tiene baseId
+        if let baseId = currentUser.baseId {
+            if let base = await BaseService.shared.getBase(id: baseId) {
+                user.base = base
+                #if DEBUG
+                print("🏥 Base cargada: \(base.name)")
+                #endif
+            }
+        }
+        
+        enrichedUser = user
     }
     
     // MARK: - Load Permissions
     
     private func loadPermissions() async {
-        // Cargar permisos en paralelo
-        async let adminCheck = checkAdminAccess()
-        async let roleCheck = PolicyService.shared.getRoleKind(for: currentUser)
+        let user = enrichedUser ?? currentUser
         
-        canAccessAdmin = await adminCheck
-        roleKind = await roleCheck
-    }
-    
-    /// Verifica si el usuario puede acceder al tab Admin
-    private func checkAdminAccess() async -> Bool {
-        // Admin accesible para Programador y Logística
-        let isProgrammer = await AuthorizationServiceFS.isProgrammer(currentUser)
-        if isProgrammer { return true }
+        // Verificar permisos de administración
+        let canCreateKits = await AuthorizationServiceFS.allowed(.create, on: .kit, for: user)
+        let canManageUsers = await AuthorizationServiceFS.allowed(.create, on: .user, for: user)
+        let canUpdateUsers = await AuthorizationServiceFS.allowed(.update, on: .user, for: user)
+        let canDeleteUsers = await AuthorizationServiceFS.allowed(.delete, on: .user, for: user)
+        let canEditThresholds = await AuthorizationServiceFS.canEditThresholds(user)
         
-        let isLogistics = await AuthorizationServiceFS.isLogistics(currentUser)
-        return isLogistics
-    }
-    
-    // MARK: - Load SwiftData User (Puente Temporal)
-    
-    /// Busca el usuario equivalente en SwiftData
-    /// TODO: Eliminar cuando las vistas hijas migren a Firebase (TAREAS 12-14)
-    private func loadSwiftDataUser() async {
-        let username = currentUser.username
-        let descriptor = FetchDescriptor<User>(
-            predicate: #Predicate { $0.username == username }
-        )
+        // Mostrar tab de admin si tiene algún permiso de gestión
+        showAdminTab = canCreateKits || canEditThresholds || canManageUsers || canUpdateUsers || canDeleteUsers
         
-        do {
-            let users = try modelContext.fetch(descriptor)
-            bridgedUser = users.first
-            
-            if bridgedUser == nil {
-                print("⚠️ Usuario '\(username)' no encontrado en SwiftData")
-            }
-        } catch {
-            print("❌ Error buscando usuario en SwiftData: \(error)")
-        }
+        #if DEBUG
+        print("📋 Permisos para @\(user.username):")
+        print("   - showAdminTab: \(showAdminTab)")
+        #endif
     }
 }
-    // MARK: - Preview
-    // MARK: - Preview
-    // TODO: Añadir previews cuando el puente esté estable
+
+// MARK: - Preview
+
+#Preview("MainTabView - Programmer") {
+    var testUser = UserFS(
+        id: "test_id",
+        uid: "test_uid",
+        username: "programmer",
+        fullName: "Test Programmer",
+        email: "programmer@test.com",
+        active: true,
+        roleId: "role_programmer",
+        baseId: nil
+    )
+    testUser.role = RoleFS(
+        id: "role_programmer",
+        kind: .programmer,
+        displayName: "Programador"
+    )
+    
+    return MainTabView(currentUser: testUser)
+        .environmentObject(AppState.shared)
+}
+
+#Preview("MainTabView - Logistics") {
+    var testUser = UserFS(
+        id: "test_id",
+        uid: "test_uid",
+        username: "logistica",
+        fullName: "Test Logística",
+        email: "logistica@test.com",
+        active: true,
+        roleId: "role_logistics",
+        baseId: nil
+    )
+    testUser.role = RoleFS(
+        id: "role_logistics",
+        kind: .logistics,
+        displayName: "Logística"
+    )
+    
+    return MainTabView(currentUser: testUser)
+        .environmentObject(AppState.shared)
+}
+
+#Preview("MainTabView - Sanitary") {
+    var testUser = UserFS(
+        id: "test_id",
+        uid: "test_uid",
+        username: "sanitario",
+        fullName: "Test Sanitario",
+        email: "sanitario@test.com",
+        active: true,
+        roleId: "role_sanitary",
+        baseId: nil
+    )
+    testUser.role = RoleFS(
+        id: "role_sanitary",
+        kind: .sanitary,
+        displayName: "Sanitario"
+    )
+    
+    return MainTabView(currentUser: testUser)
+        .environmentObject(AppState.shared)
+}

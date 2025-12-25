@@ -5,8 +5,8 @@
 //  Created by Adolfo on 3/12/25.
 //
 
+
 import SwiftUI
-import SwiftData
 
 /// Vista principal con tabs para usuarios autenticados (Firebase)
 ///
@@ -14,13 +14,12 @@ import SwiftData
 /// - Recibir UserFS de Firebase
 /// - Cargar datos relacionados (Role, Base)
 /// - Calcular permisos usando AuthorizationServiceFS
-/// - Crear User temporal para vistas SwiftData existentes
 /// - Mostrar tabs según permisos del usuario
 ///
-/// **Bridge Pattern:**
-/// Esta vista actúa como puente entre Firebase (UserFS) y las vistas
-/// existentes de SwiftData (User). Se eliminará cuando todas las vistas
-/// estén migradas a Firebase (TAREA 17).
+/// **Estado de Migración (TAREA 14 completada):**
+/// - ✅ InventoryView: Usa UserFS (Firebase) - TAREA 12
+/// - ✅ AdminView: Usa UserFS (Firebase) - TAREA 13
+/// - ✅ ProfileView: Usa UserFS (Firebase) - TAREA 14
 struct MainTabScreen: View {
     
     // MARK: - Properties
@@ -30,15 +29,11 @@ struct MainTabScreen: View {
     // MARK: - Environment
     
     @EnvironmentObject private var appState: AppState
-    @Environment(\.modelContext) private var context
     
     // MARK: - State
     
     /// Usuario enriquecido con datos relacionados cargados
     @State private var enrichedUser: UserFS?
-    
-    /// Usuario temporal de SwiftData para vistas existentes
-    @State private var swiftDataUser: User?
     
     /// Estado de carga
     @State private var isLoading = true
@@ -57,14 +52,12 @@ struct MainTabScreen: View {
                 loadingView
             } else if let error = loadError {
                 errorView(message: error)
-            } else if let user = swiftDataUser {
-                mainTabContent(user: user)
             } else {
-                errorView(message: "No se pudo cargar el usuario")
+                mainTabContent(user: enrichedUser ?? currentUser)
             }
         }
         .task {
-            await setupBridge()
+            await setup()
         }
     }
     
@@ -92,7 +85,7 @@ struct MainTabScreen: View {
             Text(message)
         } actions: {
             Button("Reintentar") {
-                Task { await setupBridge() }
+                Task { await setup() }
             }
             .buttonStyle(.bordered)
             
@@ -105,16 +98,21 @@ struct MainTabScreen: View {
     
     // MARK: - Main Tab Content
     
+    /// Contenido principal de tabs
+    ///
+    /// **TAREA 14 Completada:**
+    /// Todas las vistas ahora usan UserFS (Firebase) directamente.
+    /// Ya no hay bridge con SwiftData.
     @ViewBuilder
-    private func mainTabContent(user: User) -> some View {
+    private func mainTabContent(user: UserFS) -> some View {
         TabView {
-            // Tab: Inventario (siempre visible)
+            // Tab: Inventario - ✅ UserFS (Firebase)
             InventoryView(currentUser: user)
                 .tabItem {
                     Label("Inventario", systemImage: "shippingbox")
                 }
             
-            // Tab: Gestión (solo si tiene permisos)
+            // Tab: Gestión - ✅ UserFS (Firebase)
             if showAdminTab {
                 AdminView(currentUser: user)
                     .tabItem {
@@ -122,7 +120,7 @@ struct MainTabScreen: View {
                     }
             }
             
-            // Tab: Perfil (siempre visible)
+            // Tab: Perfil - ✅ UserFS (Firebase) - ACTUALIZADO EN TAREA 14
             ProfileView(currentUser: user)
                 .tabItem {
                     Label("Perfil", systemImage: "person")
@@ -130,29 +128,20 @@ struct MainTabScreen: View {
         }
     }
     
-    // MARK: - Setup Bridge
+    // MARK: - Setup
     
-    /// Configura el bridge entre Firebase y SwiftData
-    private func setupBridge() async {
+    /// Configura la vista cargando datos relacionados y calculando permisos
+    private func setup() async {
         isLoading = true
         loadError = nil
         
-        do {
-            // 1. Cargar datos relacionados (role, base)
-            await loadRelatedData()
-            
-            // 2. Calcular permisos usando AuthorizationServiceFS
-            await calculatePermissions()
-            
-            // 3. Crear User temporal para vistas SwiftData
-            try createTemporaryUser()
-            
-            print("✅ Bridge configurado correctamente")
-            
-        } catch {
-            loadError = error.localizedDescription
-            print("❌ Error configurando bridge: \(error)")
-        }
+        // 1. Cargar datos relacionados (role, base)
+        await loadRelatedData()
+        
+        // 2. Calcular permisos usando AuthorizationServiceFS
+        await calculatePermissions()
+        
+        print("✅ MainTabScreen configurado correctamente")
         
         isLoading = false
     }
@@ -175,7 +164,7 @@ struct MainTabScreen: View {
         
         // Cargar Base si tiene baseId
         if let baseId = currentUser.baseId {
-            if let base = await BaseService.shared.getBase(id: baseId) {  // ✅ Corregido
+            if let base = await BaseService.shared.getBase(id: baseId) {
                 user.base = base
                 print("🏥 Base cargada: \(base.name)")
             } else {
@@ -199,9 +188,7 @@ struct MainTabScreen: View {
         let canDeleteUsers = await AuthorizationServiceFS.allowed(.delete, on: .user, for: user)
         
         // Verificar si puede editar umbrales (programmer o logistics)
-        let isProgrammer = await AuthorizationServiceFS.isProgrammer(user)
-        let isLogistics = await AuthorizationServiceFS.isLogistics(user)
-        let canEditThresholds = isProgrammer || isLogistics
+        let canEditThresholds = await AuthorizationServiceFS.canEditThresholds(user)
         
         // Mostrar tab de admin si tiene algún permiso de gestión
         showAdminTab = canCreateKits || canEditThresholds || canManageUsers || canUpdateUsers || canDeleteUsers
@@ -215,75 +202,11 @@ struct MainTabScreen: View {
         print("   - showAdminTab: \(showAdminTab)")
         #endif
     }
-    
-    // MARK: - Create Temporary User
-    
-    /// Crea un User temporal de SwiftData para compatibilidad con vistas existentes
-    /// - Throws: BridgeError si no se puede crear el usuario
-    private func createTemporaryUser() throws {
-        let user = enrichedUser ?? currentUser
-        
-        // Crear Role temporal si existe
-        var tempRole: Role? = nil
-        if let roleFS = user.role {
-            tempRole = Role(
-                kind: roleFS.kind,
-                displayName: roleFS.displayName
-            )
-        }
-        
-        // Crear Base temporal si existe
-        var tempBase: Base? = nil
-        if let baseFS = user.base {
-            tempBase = Base(
-                code: baseFS.code,
-                name: baseFS.name,
-                location: baseFS.address
-            )
-        }
-        
-        // Crear User temporal (NO se inserta en el ModelContext)
-        let tempUser = User(
-            username: user.username,
-            fullName: user.fullName,
-            active: user.active,
-            role: tempRole,
-            base: tempBase
-        )
-        
-        swiftDataUser = tempUser
-        
-        print("✅ User temporal creado: @\(tempUser.username)")
-        print("   - Role: \(tempUser.role?.displayName ?? "nil")")
-        print("   - Base: \(tempUser.base?.name ?? "nil")")
-    }
-}
-
-// MARK: - Bridge Error
-
-extension MainTabScreen {
-    enum BridgeError: LocalizedError {
-        case userCreationFailed
-        case roleLoadFailed(String)
-        case baseLoadFailed(String)
-        
-        var errorDescription: String? {
-            switch self {
-            case .userCreationFailed:
-                return "No se pudo crear el usuario temporal"
-            case .roleLoadFailed(let id):
-                return "No se pudo cargar el rol: \(id)"
-            case .baseLoadFailed(let id):
-                return "No se pudo cargar la base: \(id)"
-            }
-        }
-    }
 }
 
 // MARK: - Preview
 
 #Preview("MainTabScreen - Programmer") {
-    // Crear usuario de prueba con rol
     var testUser = UserFS(
         id: "test_id",
         uid: "test_uid",
@@ -302,7 +225,27 @@ extension MainTabScreen {
     
     return MainTabScreen(currentUser: testUser)
         .environmentObject(AppState.shared)
-        .modelContainer(PreviewSupport.container)
+}
+
+#Preview("MainTabScreen - Logistics") {
+    var testUser = UserFS(
+        id: "test_id",
+        uid: "test_uid",
+        username: "logistica",
+        fullName: "Test Logística",
+        email: "logistica@test.com",
+        active: true,
+        roleId: "role_logistics",
+        baseId: nil
+    )
+    testUser.role = RoleFS(
+        id: "role_logistics",
+        kind: .logistics,
+        displayName: "Logística"
+    )
+    
+    return MainTabScreen(currentUser: testUser)
+        .environmentObject(AppState.shared)
 }
 
 #Preview("MainTabScreen - Sanitary") {
@@ -324,5 +267,4 @@ extension MainTabScreen {
     
     return MainTabScreen(currentUser: testUser)
         .environmentObject(AppState.shared)
-        .modelContainer(PreviewSupport.container)
 }

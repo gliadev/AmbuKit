@@ -5,6 +5,7 @@
 //  Created by Adolfo on 11/11/25.
 //
 
+
 import XCTest
 import SwiftData
 @testable import AmbuKit
@@ -14,12 +15,24 @@ final class MovementAndItemsTests: XCTestCase {
     var container: ModelContainer!
     var context: ModelContext!
 
-    override func setUpWithError() throws {
+    // MARK: - Setup
+    
+    override func setUp() async throws {
+        try await super.setUp()
+        
         container = try ModelContainerBuilder.make(inMemory: true)
         context = ModelContext(container)
         try SeedDataLoader.runIfNeeded(context: context)
     }
+    
+    override func tearDown() async throws {
+        context = nil
+        container = nil
+        try await super.tearDown()
+    }
 
+    // MARK: - Tests
+    
     func testOnlyProgrammerCanCreateKit() throws {
         let prog = try XCTUnwrap(
             try context.fetch(FetchDescriptor<User>(
@@ -53,7 +66,6 @@ final class MovementAndItemsTests: XCTestCase {
             )).first
         )
 
-        
         let allItems = try context.fetch(FetchDescriptor<KitItem>())
         guard let item = allItems.first(where: { $0.kit?.code == "KIT-AMP-01" }) ?? allItems.first else {
             XCTFail("Seed no creó KitItem para KIT-AMP-01"); return
@@ -64,8 +76,6 @@ final class MovementAndItemsTests: XCTestCase {
         XCTAssertNoThrow(try repo.updateThresholds(item, min: 5.0, max: 12.0, actor: log))
     }
 
-
-
     func testLogisticsCannotCreateOrDeleteUsers() throws {
         let log = try XCTUnwrap(
             try context.fetch(FetchDescriptor<User>(
@@ -73,7 +83,6 @@ final class MovementAndItemsTests: XCTestCase {
             )).first
         )
 
-        
         let allRoles = try context.fetch(FetchDescriptor<Role>())
         let roleSan = try XCTUnwrap(allRoles.first { $0.kind == .sanitary })
 

@@ -3,7 +3,7 @@
 //  AmbuKit
 //
 //  Created by Adolfo on 11/11/25.
-//
+//s
 
 import XCTest
 import SwiftData
@@ -14,10 +14,19 @@ final class AuthorizationRulesTests: XCTestCase {
     var container: ModelContainer!
     var context: ModelContext!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
+        try await super.setUp()
+        
+        
         container = try ModelContainerBuilder.make(inMemory: true)
         context = ModelContext(container)
         try SeedDataLoader.runIfNeeded(context: context)
+    }
+    
+    override func tearDown() async throws {
+        context = nil
+        container = nil
+        try await super.tearDown()
     }
 
     func testSanitaryCapabilities() throws {

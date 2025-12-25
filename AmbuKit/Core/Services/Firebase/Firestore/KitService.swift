@@ -10,7 +10,7 @@ import Foundation
 import FirebaseFirestore
 import Combine
 
-/// Servicio para gestionar Kits y sus Items en Firestore
+/// Servicio para gestionar Kits y sus ƒ en Firestore
 /// Maneja 2 entidades: Kit y KitItem
 /// Implementa CRUD completo con operaciones de stock y validaciones
 @MainActor
@@ -386,6 +386,88 @@ final class KitService: ObservableObject {
             
         } catch {
             print("❌ Error actualizando item del kit: \(error.localizedDescription)")
+            throw KitServiceError.firestoreError(error)
+        }
+    }
+    
+    // MARK: - Update Thresholds Only (TAREA 13)
+    
+    /// Actualiza SOLO los umbrales (min/max) de un item de kit
+    ///
+    /// **Diferencia con updateKitItem():**
+    /// - `updateKitItem()` actualiza el KitItemFS completo
+    /// - `updateKitThresholds()` actualiza SOLO min y max (más eficiente)
+    ///
+    /// **Permisos requeridos:**
+    /// - Programador: ✅ Permitido
+    /// - Logística: ✅ Permitido
+    /// - Sanitario: ❌ NO permitido
+    ///
+    /// - Parameters:
+    ///   - itemId: ID del KitItem a actualizar
+    ///   - min: Nuevo valor mínimo
+    ///   - max: Nuevo valor máximo (opcional, nil para sin máximo)
+    ///   - actor: Usuario que realiza la acción
+    /// - Throws: KitServiceError si hay problemas de permisos o datos
+    func updateKitThresholds(
+        itemId: String,
+        min: Double,
+        max: Double?,
+        actor: UserFS?
+    ) async throws {
+        // 1. Validar permisos (usa canEditThresholds que permite Programmer y Logistics)
+        let canEdit = await AuthorizationServiceFS.canEditThresholds(actor)
+        guard canEdit else {
+            throw KitServiceError.unauthorized("No tienes permisos para editar umbrales")
+        }
+        
+        // 2. Validar itemId
+        guard !itemId.isEmpty else {
+            throw KitServiceError.invalidData("ID del item no válido")
+        }
+        
+        // 3. Validar valores
+        guard min >= 0 else {
+            throw KitServiceError.invalidData("El mínimo no puede ser negativo")
+        }
+        
+        if let maxValue = max, maxValue < min {
+            throw KitServiceError.invalidData("El máximo no puede ser menor que el mínimo")
+        }
+        
+        // 4. Preparar actualizaciones (solo min, max y updatedAt)
+        var updates: [String: Any] = [
+            "min": min,
+            "updatedAt": Timestamp(date: Date())
+        ]
+        
+        // Para max: si es nil, guardamos NSNull() para eliminar el campo
+        // Si tiene valor, lo guardamos normalmente
+        if let maxValue = max {
+            updates["max"] = maxValue
+        } else {
+            updates["max"] = NSNull()
+        }
+        
+        // 5. Actualizar en Firestore
+        do {
+            try await db.collection(KitItemFS.collectionName)
+                .document(itemId)
+                .updateData(updates)
+            
+            // 6. Actualizar cache si existe
+            if var cachedItem = kitItemCache[itemId] {
+                cachedItem.min = min
+                cachedItem.max = max
+                cachedItem.updatedAt = Date()
+                kitItemCache[itemId] = cachedItem
+            }
+            
+            // 7. Log para debug
+            print("✅ Umbrales actualizados para item \(itemId): min=\(min), max=\(max ?? 0)")
+            
+        } catch {
+            print("❌ Error actualizando umbrales: \(error.localizedDescription)")
             throw KitServiceError.firestoreError(error)
         }
     }

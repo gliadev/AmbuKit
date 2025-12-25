@@ -237,7 +237,7 @@ final class VehicleServiceTests: XCTestCase {
             id: vehicle.id,
             code: vehicle.code,
             plate: "2222-BBB",
-            type: VehicleFS.VehicleType(rawValue: vehicle.type) ?? .ambulance,  // ✅ .ambulance
+            type: VehicleFS.VehicleType(rawValue: vehicle.type) ?? .sva,  
             baseId: vehicle.baseId
         )
         try await service.update(vehicle: updatedVehicle, actor: testProgrammerUser)

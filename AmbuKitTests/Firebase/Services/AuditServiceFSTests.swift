@@ -16,12 +16,16 @@ final class AuditServiceFSTests: XCTestCase {
     // MARK: - Setup
     
     override func setUp() async throws {
-        // Usar emulador de Firestore
-        let settings = Firestore.firestore().settings
-        settings.host = "localhost:8080"
-        settings.isSSLEnabled = false
-        settings.cacheSettings = MemoryCacheSettings()
-        Firestore.firestore().settings = settings
+        try await super.setUp()
+        
+        // Configurar Firebase (solo la primera vez)
+        FirebaseTestHelper.configureIfNeeded()
+    }
+    
+    override func tearDown() async throws {
+        // No limpiamos entre tests para evitar interferencia
+        // Los tests usan UUIDs únicos para cada entidad
+        try await super.tearDown()
     }
     
     // MARK: - Logging Tests
@@ -38,6 +42,9 @@ final class AuditServiceFSTests: XCTestCase {
             actor: nil,
             details: "Test create"
         )
+        
+        // Pequeña espera para que Firestore procese
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
         
         // Then
         let logs = await AuditServiceFS.getLogsForEntity(.kit, entityId: entityId)
@@ -68,6 +75,8 @@ final class AuditServiceFSTests: XCTestCase {
             details: "Test update"
         )
         
+        try await Task.sleep(nanoseconds: 500_000_000)
+        
         // Then
         let logs = await AuditServiceFS.getLogsForEntity(.base, entityId: entityId)
         XCTAssertEqual(logs.first?.actorUsername, "testuser")
@@ -82,7 +91,7 @@ final class AuditServiceFSTests: XCTestCase {
         AuditServiceFS.logAsync(
             .delete,
             entity: .vehicle,
-            entityId: "test-vehicle",
+            entityId: "test-vehicle-\(UUID().uuidString)",
             actor: nil
         )
         
@@ -94,13 +103,15 @@ final class AuditServiceFSTests: XCTestCase {
     // MARK: - Query Tests
     
     func testGetLogsWithFilters() async throws {
-        // Given - crear varios logs
+        // Given - crear varios logs con IDs únicos
         let kitId = UUID().uuidString
         let baseId = UUID().uuidString
         
         await AuditServiceFS.log(.create, entity: .kit, entityId: kitId, actor: nil)
         await AuditServiceFS.log(.update, entity: .kit, entityId: kitId, actor: nil)
         await AuditServiceFS.log(.create, entity: .base, entityId: baseId, actor: nil)
+        
+        try await Task.sleep(nanoseconds: 500_000_000)
         
         // When - filtrar por entidad
         let kitLogs = await AuditServiceFS.getLogs(entity: .kit, entityId: kitId)
@@ -111,28 +122,33 @@ final class AuditServiceFSTests: XCTestCase {
     }
     
     func testGetLogsForUser() async throws {
-        // Given
+        // Given - username único para este test
+        let uniqueUsername = "sanitario_\(UUID().uuidString.prefix(8))"
         let actor = UserFS(
-            uid: "user-123",
-            username: "sanitario1",
-            fullName: "Sanitario Uno",
-            email: "san1@example.com"
+            uid: "user-\(UUID().uuidString)",
+            username: uniqueUsername,
+            fullName: "Sanitario Test",
+            email: "san@example.com"
         )
         
-        await AuditServiceFS.log(.create, entity: .kit, entityId: "k1", actor: actor)
-        await AuditServiceFS.log(.update, entity: .kitItem, entityId: "ki1", actor: actor)
+        await AuditServiceFS.log(.create, entity: .kit, entityId: "k1-\(UUID().uuidString)", actor: actor)
+        await AuditServiceFS.log(.update, entity: .kitItem, entityId: "ki1-\(UUID().uuidString)", actor: actor)
+        
+        try await Task.sleep(nanoseconds: 500_000_000)
         
         // When
-        let userLogs = await AuditServiceFS.getLogsForUser(username: "sanitario1")
+        let userLogs = await AuditServiceFS.getLogsForUser(username: uniqueUsername)
         
         // Then
         XCTAssertGreaterThanOrEqual(userLogs.count, 2)
-        XCTAssertTrue(userLogs.allSatisfy { $0.actorUsername == "sanitario1" })
+        XCTAssertTrue(userLogs.allSatisfy { $0.actorUsername == uniqueUsername })
     }
     
     func testGetRecentLogs() async throws {
         // Given
-        await AuditServiceFS.log(.read, entity: .kit, entityId: "c1", actor: nil)
+        await AuditServiceFS.log(.read, entity: .kit, entityId: "c1-\(UUID().uuidString)", actor: nil)
+        
+        try await Task.sleep(nanoseconds: 500_000_000)
         
         // When
         let recentLogs = await AuditServiceFS.getRecentLogs(limit: 10)
@@ -146,15 +162,18 @@ final class AuditServiceFSTests: XCTestCase {
     }
     
     func testGetLogsWithLimit() async throws {
-        // Given - crear más de 5 logs
+        // Given - crear más de 5 logs con IDs únicos
+        let prefix = UUID().uuidString.prefix(8)
         for i in 1...10 {
             await AuditServiceFS.log(
                 .create,
                 entity: .kitItem,
-                entityId: "item-\(i)",
+                entityId: "item-\(prefix)-\(i)",
                 actor: nil
             )
         }
+        
+        try await Task.sleep(nanoseconds: 1_000_000_000) // 1s para 10 logs
         
         // When
         let limitedLogs = await AuditServiceFS.getLogs(entity: .kitItem, limit: 5)
@@ -184,10 +203,11 @@ final class AuditServiceFSTests: XCTestCase {
     
     func testLogBatch() async throws {
         // Given
+        let prefix = UUID().uuidString.prefix(8)
         let entries: [(ActionKind, EntityKind, String, UserFS?, String?)] = [
-            (.delete, .kitItem, "item-1", nil, "Batch delete 1"),
-            (.delete, .kitItem, "item-2", nil, "Batch delete 2"),
-            (.delete, .kitItem, "item-3", nil, "Batch delete 3")
+            (.delete, .kitItem, "item-\(prefix)-1", nil, "Batch delete 1"),
+            (.delete, .kitItem, "item-\(prefix)-2", nil, "Batch delete 2"),
+            (.delete, .kitItem, "item-\(prefix)-3", nil, "Batch delete 3")
         ]
         
         let mappedEntries = entries.map {
@@ -197,6 +217,8 @@ final class AuditServiceFSTests: XCTestCase {
         // When
         await AuditServiceFS.logBatch(mappedEntries)
         
+        try await Task.sleep(nanoseconds: 500_000_000)
+        
         // Then
         let logs = await AuditServiceFS.getLogs(action: .delete, entity: .kitItem, limit: 10)
         XCTAssertGreaterThanOrEqual(logs.count, 3)
@@ -205,8 +227,6 @@ final class AuditServiceFSTests: XCTestCase {
     // MARK: - Statistics Tests
     
     func testGetStatistics() async throws {
-        // Given - algunos logs ya existen
-        
         // When
         let stats = await AuditServiceFS.getStatistics()
         
@@ -219,9 +239,10 @@ final class AuditServiceFSTests: XCTestCase {
     }
     
     func testGetMostActiveUsers() async throws {
-        // Given
-        let actor1 = UserFS(uid: "1", username: "user1", fullName: "User 1", email: "u1@test.com")
-        let actor2 = UserFS(uid: "2", username: "user2", fullName: "User 2", email: "u2@test.com")
+        // Given - usernames únicos
+        let prefix = UUID().uuidString.prefix(8)
+        let actor1 = UserFS(uid: "1", username: "user1_\(prefix)", fullName: "User 1", email: "u1@test.com")
+        let actor2 = UserFS(uid: "2", username: "user2_\(prefix)", fullName: "User 2", email: "u2@test.com")
         
         // user1 hace 3 acciones
         for _ in 1...3 {
@@ -230,6 +251,8 @@ final class AuditServiceFSTests: XCTestCase {
         
         // user2 hace 1 acción
         await AuditServiceFS.log(.create, entity: .kit, entityId: UUID().uuidString, actor: actor2)
+        
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         
         // When
         let activeUsers = await AuditServiceFS.getMostActiveUsers(limit: 5)
@@ -241,9 +264,6 @@ final class AuditServiceFSTests: XCTestCase {
     // MARK: - Error Handling Tests
     
     func testLogHandlesErrorsSilently() async throws {
-        // Este test verifica que el servicio no lanza excepciones
-        // incluso con datos edge case
-        
         // Given - datos vacíos/nil
         await AuditServiceFS.log(
             .create,
@@ -254,7 +274,6 @@ final class AuditServiceFSTests: XCTestCase {
         )
         
         // Then - no debe lanzar excepción
-        // Si llegamos aquí, el test pasa
         XCTAssertTrue(true)
     }
 }

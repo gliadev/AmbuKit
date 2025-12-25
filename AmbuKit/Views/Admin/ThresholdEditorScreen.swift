@@ -11,23 +11,11 @@ import SwiftUI
 // MARK: - ThresholdEditorScreen
 
 /// Pantalla completa para editar los umbrales (min/max) de los items de un kit
-///
-/// **Características:**
-/// - Lista todos los items del kit con sus umbrales actuales
-/// - Permite editar min/max de cada item
-/// - Muestra nombre del item desde el catálogo
-/// - Feedback visual de guardado (loading/success/error)
-///
-/// **Permisos:**
-/// - Requiere permiso de edición de umbrales (Programador o Logística)
 struct ThresholdEditorScreen: View {
     
     // MARK: - Properties
     
-    /// Kit cuyos umbrales se van a editar
     let kit: KitFS
-    
-    /// Usuario actual de Firebase
     let currentUser: UserFS
     
     // MARK: - Environment
@@ -36,16 +24,9 @@ struct ThresholdEditorScreen: View {
     
     // MARK: - State
     
-    /// Items del kit
     @State private var items: [KitItemFS] = []
-    
-    /// Diccionario de catálogo (itemId -> CatalogItemFS)
     @State private var catalogDict: [String: CatalogItemFS] = [:]
-    
-    /// Estado de carga
     @State private var isLoading = true
-    
-    /// Mensaje de error
     @State private var errorMessage: String?
     
     // MARK: - Body
@@ -129,22 +110,17 @@ struct ThresholdEditorScreen: View {
     
     private var itemsListView: some View {
         List {
-            // Header con info del kit
             Section {
                 kitInfoHeader
             }
             
-            // Items del kit
             Section {
                 ForEach(items) { item in
                     ThresholdRowView(
                         item: item,
-                        catalogItem: catalogDict[item.catalogItemId],
+                        catalogItem: catalogDict[item.catalogItemId ?? ""],
                         currentUser: currentUser,
-                        onSaved: {
-                            // Callback opcional cuando se guarda
-                            // Podríamos recargar datos si es necesario
-                        }
+                        onSaved: nil
                     )
                 }
             } header: {
@@ -164,7 +140,6 @@ struct ThresholdEditorScreen: View {
     
     private var kitInfoHeader: some View {
         HStack(spacing: 16) {
-            // Icono
             Image(systemName: kitIcon)
                 .font(.title)
                 .foregroundStyle(.blue)
@@ -172,19 +147,16 @@ struct ThresholdEditorScreen: View {
                 .background(Color.blue.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             
-            // Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(kit.name)
                     .font(.headline)
                 
                 HStack(spacing: 8) {
-                    // Código
                     Label(kit.code, systemImage: "qrcode")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    // Tipo
-                    Text(kit.type.rawValue)
+                    Text(kit.type)
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -193,7 +165,6 @@ struct ThresholdEditorScreen: View {
                         .clipShape(Capsule())
                 }
                 
-                // Vehículo asignado
                 if let vehicleId = kit.vehicleId, !vehicleId.isEmpty {
                     Label("Asignado a vehículo", systemImage: "car.fill")
                         .font(.caption)
@@ -208,24 +179,24 @@ struct ThresholdEditorScreen: View {
     
     // MARK: - Computed Properties
     
+    /// KitType: SVB, SVAe, SVA, custom
     private var kitIcon: String {
         switch kit.type {
-        case .SVA, .SVAe:
+        case "SVA":
             return "cross.case.fill"
-        case .SVB:
+        case "SVAe":
+            return "cross.case.fill"
+        case "SVB":
             return "shippingbox.fill"
-        case .pediatrico:
-            return "figure.and.child.holdinghands"
-        case .trauma:
-            return "bandage.fill"
-        case .ampulario:
-            return "pills.fill"
+        case "custom":
+            return "square.grid.2x2.fill"
+        default:
+            return "shippingbox"
         }
     }
     
     // MARK: - Load Data
     
-    /// Carga los items del kit y el catálogo
     private func loadData() async {
         isLoading = true
         errorMessage = nil
@@ -236,14 +207,12 @@ struct ThresholdEditorScreen: View {
             return
         }
         
-        // Cargar en paralelo: items del kit y catálogo completo
         async let itemsTask = KitService.shared.getKitItems(kitId: kitId)
         async let catalogTask = CatalogService.shared.getAllItems()
         
         items = await itemsTask
         let allCatalog = await catalogTask
         
-        // Crear diccionario de catálogo para acceso rápido
         var catalog: [String: CatalogItemFS] = [:]
         for item in allCatalog {
             if let id = item.id {
@@ -277,11 +246,10 @@ struct ThresholdEditorScreen_Previews: PreviewProvider {
     }
     
     static let previewKit = KitFS(
-        id: "kit_001",
         code: "KIT-SVB-001",
         name: "Kit SVB Ambulancia 1",
-        type: .SVB,
-        status: "activo",
+        type: "SVB",
+        status: .active,
         vehicleId: "vehicle_001"
     )
     

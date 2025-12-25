@@ -4,6 +4,8 @@
 //
 //  Created by Adolfo on 11/11/25.
 //
+
+
 import XCTest
 import SwiftData
 @testable import AmbuKit
@@ -13,12 +15,24 @@ final class DeletionAuditTests: XCTestCase {
     var container: ModelContainer!
     var context: ModelContext!
 
-    override func setUpWithError() throws {
+    // MARK: - Setup
+    
+    override func setUp() async throws {
+        try await super.setUp()
+        
         container = try ModelContainerBuilder.make(inMemory: true)
         context = ModelContext(container)
         try SeedDataLoader.runIfNeeded(context: context)
     }
+    
+    override func tearDown() async throws {
+        context = nil
+        container = nil
+        try await super.tearDown()
+    }
 
+    // MARK: - Tests
+    
     func testDeleteKitIsBlockedForSanitary() throws {
         let san = try XCTUnwrap(
             try context.fetch(FetchDescriptor<User>(

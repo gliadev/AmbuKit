@@ -4,15 +4,17 @@
 //
 //  Created by Adolfo on 15/11/25.
 //
+//  TAREA 16.1: Actualizado para permitir que Logística cree kits y vehículos
+//
 
 import Foundation
 
 /// Servicio de autorización para Firebase
 /// Réplica exacta de AuthorizationService pero adaptado para UserFS y consultas async a Firestore
 ///
-/// **Lógica de permisos (igual que AuthorizationService):**
+/// **Lógica de permisos (ACTUALIZADA en TAREA 16.1):**
 /// - Programador → Acceso total a todo
-/// - Logística → NO crear kits, NO crear/eliminar usuarios, resto permitido
+/// - Logística → Puede crear kits y vehículos, NO crear/eliminar usuarios
 /// - Sanitario → Solo lectura + actualizar stock (KitItem)
 @MainActor
 public enum AuthorizationServiceFS {
@@ -177,9 +179,23 @@ public enum AuthorizationServiceFS {
     }
     
     /// Verifica si el usuario puede crear kits
-    /// **Regla de negocio:** Solo Programador
+    /// **Regla de negocio (ACTUALIZADA TAREA 16.1):** Programador y Logística
+    /// - ANTES: Solo Programador
+    /// - AHORA: Programador + Logística
     public static func canCreateKits(_ user: UserFS?) async -> Bool {
-        await canCreate(.kit, user: user)
+        guard let roleId = user?.roleId else { return false }
+        guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
+        
+        return role.kind == .programmer || role.kind == .logistics
+    }
+    
+    /// Verifica si el usuario puede crear vehículos
+    /// **Regla de negocio (NUEVA TAREA 16.1):** Programador y Logística
+    public static func canCreateVehicles(_ user: UserFS?) async -> Bool {
+        guard let roleId = user?.roleId else { return false }
+        guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
+        
+        return role.kind == .programmer || role.kind == .logistics
     }
     
     /// Verifica si el usuario puede actualizar stock (cantidad de KitItem)
@@ -205,8 +221,15 @@ public enum AuthorizationServiceFS {
 public enum UIPermissionsFS {
     
     /// Verifica si el usuario puede crear kits
+    /// **ACTUALIZADO TAREA 16.1:** Ahora Logística también puede
     public static func canCreateKits(_ user: UserFS?) async -> Bool {
         await AuthorizationServiceFS.canCreateKits(user)
+    }
+    
+    /// Verifica si el usuario puede crear vehículos
+    /// **NUEVO TAREA 16.1**
+    public static func canCreateVehicles(_ user: UserFS?) async -> Bool {
+        await AuthorizationServiceFS.canCreateVehicles(user)
     }
     
     /// Verifica si el usuario puede editar umbrales
@@ -275,6 +298,18 @@ extension AuthorizationServiceFS {
             return
         }
         
+        // Mostrar permisos especiales (TAREA 16.1)
+        print("\n   Permisos especiales:")
+        let canCreateKits = await canCreateKits(user)
+        let canCreateVehicles = await canCreateVehicles(user)
+        let canEditThresholds = await canEditThresholds(user)
+        let canManageUsers = await canManageUsers(user)
+        
+        print("   - Crear Kits: \(canCreateKits ? "✅" : "❌")")
+        print("   - Crear Vehículos: \(canCreateVehicles ? "✅" : "❌")")
+        print("   - Editar Umbrales: \(canEditThresholds ? "✅" : "❌")")
+        print("   - Gestionar Usuarios: \(canManageUsers ? "✅" : "❌")")
+        
         print("\n   Permisos por entidad:")
         for entity in EntityKind.allCases {
             let perms = await permissions(for: entity, user: user)
@@ -282,58 +317,8 @@ extension AuthorizationServiceFS {
             let r = perms.canRead ? "✅" : "❌"
             let u = perms.canUpdate ? "✅" : "❌"
             let d = perms.canDelete ? "✅" : "❌"
-            print("   \(entity.rawValue.padding(toLength: 15, withPad: " ", startingAt: 0)) C:\(c) R:\(r) U:\(u) D:\(d)")
+            print("   \(entity.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0)): C:\(c) R:\(r) U:\(u) D:\(d)")
         }
-        print()
-    }
-    
-    /// Verifica y muestra si un usuario puede realizar una acción específica
-    public static func checkPermission(
-        _ action: ActionKind,
-        on entity: EntityKind,
-        for user: UserFS?,
-        verbose: Bool = true
-    ) async -> Bool {
-        let hasPermission = await allowed(action, on: entity, for: user)
-        
-        if verbose {
-            let emoji = hasPermission ? "✅" : "❌"
-            let username = user?.username ?? "nil"
-            print("\(emoji) \(username) \(action.rawValue) \(entity.rawValue): \(hasPermission)")
-        }
-        
-        return hasPermission
-    }
-}
-#endif
-
-// MARK: - Migration Helper
-
-/// Helper para migrar de AuthorizationService (SwiftData) a AuthorizationServiceFS (Firebase)
-/// Útil durante el período de transición
-#if DEBUG
-extension AuthorizationServiceFS {
-    /// Compara los resultados entre SwiftData y Firebase para verificar consistencia
-    public static func validateMigration(
-        action: ActionKind,
-        entity: EntityKind,
-        swiftDataUser: User?,
-        firebaseUser: UserFS?
-    ) async -> Bool {
-        let swiftDataResult = AuthorizationService.allowed(action, on: entity, for: swiftDataUser)
-        let firebaseResult = await AuthorizationServiceFS.allowed(action, on: entity, for: firebaseUser)
-        
-        if swiftDataResult != firebaseResult {
-            print("⚠️ INCONSISTENCIA DETECTADA:")
-            print("   Usuario: \(swiftDataUser?.username ?? "nil") / \(firebaseUser?.username ?? "nil")")
-            print("   Acción: \(action.rawValue)")
-            print("   Entidad: \(entity.rawValue)")
-            print("   SwiftData: \(swiftDataResult)")
-            print("   Firebase: \(firebaseResult)")
-            return false
-        }
-        
-        return true
     }
 }
 #endif
