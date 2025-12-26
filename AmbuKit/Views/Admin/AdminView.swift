@@ -3,41 +3,41 @@
 //  AmbuKit
 //
 //  Created by Adolfo on 12/11/25.
+//  TAREA 16.5: Vista de administración - 100% Firebase
 //
-
+//  Secciones:
+//  - Crear Kit (Programador + Logística)
+//  - Crear Vehículo (Programador + Logística)
+//  - Editar Umbrales (Programador + Logística)
+//  - Gestión Usuarios (Solo Programador)
+//
 
 import SwiftUI
 
-// MARK: - AdminView (Firebase)
+// MARK: - AdminView
 
-/// Vista principal de gestión/administración
-/// - Crear kits (solo Programador)
-/// - Editar umbrales min/max (Programador y Logística)
-///
-/// **Migración Firebase:**
-/// - Usa `UserFS` en lugar de `User` (SwiftData)
-/// - Permisos verificados async con `AuthorizationServiceFS`
-/// - Operaciones CRUD a través de `KitService`
+/// Vista de administración - 100% Firebase
 struct AdminView: View {
     
     // MARK: - Properties
     
-    /// Usuario actual de Firebase
     let currentUser: UserFS
     
-    // MARK: - State - Permisos
+    // MARK: - State
     
     @State private var canCreateKits = false
+    @State private var canCreateVehicles = false
     @State private var canEditThresholds = false
-    @State private var isLoadingPermissions = true
+    @State private var canManageUsers = false
+    @State private var isLoading = true
     
     // MARK: - Body
     
     var body: some View {
         NavigationStack {
             Group {
-                if isLoadingPermissions {
-                    loadingPermissionsView
+                if isLoading {
+                    loadingView
                 } else {
                     adminContent
                 }
@@ -51,473 +51,632 @@ struct AdminView: View {
     
     // MARK: - Loading View
     
-    private var loadingPermissionsView: some View {
+    private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .tint(.blue)
-            Text("Verificando permisos...")
+            Text("Cargando permisos...")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
     }
     
     // MARK: - Admin Content
     
-    @ViewBuilder
     private var adminContent: some View {
-        Form {
-            // Sección: Crear Kit (solo Programador)
+        List {
+            // Header con info del usuario
+            userInfoHeader
+            
+            // Sección: Crear Kit
             if canCreateKits {
-                Section {
-                    KitCreatorView(currentUser: currentUser)
-                } header: {
-                    Label("Crear Kit", systemImage: "plus.circle")
-                } footer: {
-                    Text("Solo los programadores pueden crear nuevos kits.")
-                        .font(.caption)
-                }
+                createKitSection
             }
             
-            // Sección: Editar Umbrales (Programador y Logística)
+            // Sección: Crear Vehículo
+            if canCreateVehicles {
+                createVehicleSection
+            }
+            
+            // Sección: Editar Umbrales
             if canEditThresholds {
-                Section {
-                    ThresholdsEditor(currentUser: currentUser)
-                } header: {
-                    Label("Umbrales Min/Máx", systemImage: "slider.horizontal.3")
-                } footer: {
-                    Text("Programadores y Logística pueden ajustar umbrales de stock.")
-                        .font(.caption)
-                }
+                thresholdsSection
             }
             
-            // Si no tiene ningún permiso
-            if !canCreateKits && !canEditThresholds {
-                Section {
-                    noPermissionsView
+            // Sección: Gestión de Usuarios
+            if canManageUsers {
+                usersSection
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+    
+    // MARK: - User Info Header
+    
+    private var userInfoHeader: some View {
+        Section {
+            HStack(spacing: 16) {
+                // Avatar
+                ZStack {
+                    Circle()
+                        .fill(roleColor.opacity(0.15))
+                        .frame(width: 50, height: 50)
+                    
+                    Text(currentUser.fullName.prefix(1).uppercased())
+                        .font(.title2.bold())
+                        .foregroundStyle(roleColor)
+                }
+                
+                // Info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(currentUser.fullName)
+                        .font(.headline)
+                    
+                    Text("@\(currentUser.username)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    if let role = currentUser.role {
+                        Text(role.displayName)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(roleColor.opacity(0.15))
+                            .foregroundStyle(roleColor)
+                            .clipShape(Capsule())
+                    }
+                }
+                
+                Spacer()
+                
+                // Permisos badge
+                VStack(alignment: .trailing, spacing: 2) {
+                    let count = [canCreateKits, canCreateVehicles, canEditThresholds, canManageUsers].filter { $0 }.count
+                    Text("\(count)")
+                        .font(.title2.bold())
+                        .foregroundStyle(roleColor)
+                    Text("permisos")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
+            .padding(.vertical, 4)
         }
     }
     
-    // MARK: - No Permissions View
+    // MARK: - Create Kit Section
     
-    private var noPermissionsView: some View {
-        ContentUnavailableView {
-            Label("Sin permisos", systemImage: "lock.shield")
-        } description: {
-            Text("No tienes permisos para gestionar kits ni umbrales.")
+    private var createKitSection: some View {
+        Section {
+            NavigationLink {
+                CreateKitScreen(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "cross.case.fill")
+                            .font(.title3)
+                            .foregroundStyle(.blue)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Crear Kit")
+                            .font(.headline)
+                        Text("Añadir nuevo kit al sistema")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.blue)
+                }
+            }
+        } header: {
+            Label("Kits", systemImage: "shippingbox.fill")
+        }
+    }
+    
+    // MARK: - Create Vehicle Section
+    
+    private var createVehicleSection: some View {
+        Section {
+            NavigationLink {
+                CreateVehicleScreen(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.green.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "car.fill")
+                            .font(.title3)
+                            .foregroundStyle(.green)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Crear Vehículo")
+                            .font(.headline)
+                        Text("Registrar nueva ambulancia")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+        } header: {
+            Label("Vehículos", systemImage: "car.2.fill")
+        }
+    }
+    
+    // MARK: - Thresholds Section
+    
+    private var thresholdsSection: some View {
+        Section {
+            NavigationLink {
+                ThresholdsListScreen(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.orange.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.title3)
+                            .foregroundStyle(.orange)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Editar Umbrales")
+                            .font(.headline)
+                        Text("Configurar mín/máx de items")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Label("Configuración", systemImage: "gearshape.fill")
+        }
+    }
+    
+    // MARK: - Users Section
+    
+    private var usersSection: some View {
+        Section {
+            NavigationLink {
+                UsersListScreen(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.purple.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "person.2.fill")
+                            .font(.title3)
+                            .foregroundStyle(.purple)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Gestión de Usuarios")
+                            .font(.headline)
+                        Text("Crear, editar y eliminar usuarios")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Label("Usuarios", systemImage: "person.fill")
+        } footer: {
+            Text("Solo disponible para Programadores")
+                .font(.caption2)
+        }
+    }
+    
+    // MARK: - Helpers
+    
+    private var roleColor: Color {
+        guard let role = currentUser.role else { return .blue }
+        switch role.kind {
+        case .programmer: return .blue
+        case .logistics: return .orange
+        case .sanitary: return .green
         }
     }
     
     // MARK: - Load Permissions
     
     private func loadPermissions() async {
-        isLoadingPermissions = true
+        isLoading = true
         
-        async let canCreateTask = AuthorizationServiceFS.canCreateKits(currentUser)
-        async let canEditTask = AuthorizationServiceFS.canEditThresholds(currentUser)
+        async let kits = AuthorizationServiceFS.canCreateKits(currentUser)
+        async let vehicles = AuthorizationServiceFS.canCreateVehicles(currentUser)
+        async let thresholds = AuthorizationServiceFS.canEditThresholds(currentUser)
+        async let users = AuthorizationServiceFS.canManageUsers(currentUser)
         
-        canCreateKits = await canCreateTask
-        canEditThresholds = await canEditTask
+        canCreateKits = await kits
+        canCreateVehicles = await vehicles
+        canEditThresholds = await thresholds
+        canManageUsers = await users
         
-        #if DEBUG
-        print("📋 AdminView permisos para @\(currentUser.username):")
-        print("   - canCreateKits: \(canCreateKits)")
-        print("   - canEditThresholds: \(canEditThresholds)")
-        #endif
-        
-        isLoadingPermissions = false
+        isLoading = false
     }
 }
 
-// MARK: - KitCreatorView (Subvista privada)
+// MARK: - Create Kit Screen
 
-private struct KitCreatorView: View {
-    
+struct CreateKitScreen: View {
     let currentUser: UserFS
     
-    // MARK: - State - Formulario
+    @Environment(\.dismiss) private var dismiss
     
     @State private var code = ""
     @State private var name = ""
     @State private var selectedType: KitType = .SVB
-    @State private var selectedVehicleId: String?
-    
-    // MARK: - State - Datos
-    
     @State private var vehicles: [VehicleFS] = []
-    @State private var isLoadingVehicles = true
-    
-    // MARK: - State - Operación
-    
-    @State private var isCreating = false
-    @State private var showSuccess = false
+    @State private var selectedVehicleId: String?
+    @State private var isProcessing = false
     @State private var errorMessage: String?
-    
-    // MARK: - Body
+    @State private var showSuccess = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Campo: Código
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Código")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                TextField("Ej: KIT-SVB-001", text: $code)
-                    .textFieldStyle(.roundedBorder)
+        Form {
+            Section {
+                TextField("Código (ej: KIT-SVA-001)", text: $code)
                     .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
-            }
-            
-            // Campo: Nombre
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Nombre")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 
-                TextField("Ej: Kit SVB Ambulancia 1", text: $name)
-                    .textFieldStyle(.roundedBorder)
-            }
-            
-            // Picker: Tipo de Kit
-            // KitType tiene: SVB, SVAe, SVA, custom
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Tipo de Kit")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                TextField("Nombre del kit", text: $name)
                 
-                Picker("Tipo", selection: $selectedType) {
+                Picker("Tipo de kit", selection: $selectedType) {
                     ForEach(KitType.allCases) { type in
-                        Text(type.rawValue).tag(type)
+                        Label(type.rawValue, systemImage: iconFor(type))
+                            .tag(type)
                     }
                 }
-                .pickerStyle(.segmented)
-            }
-            
-            // Picker: Vehículo (opcional)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Asignar a Vehículo (opcional)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 
-                if isLoadingVehicles {
-                    HStack {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                        Text("Cargando vehículos...")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                Picker("Vehículo", selection: $selectedVehicleId) {
+                    Text("— Sin asignar —").tag(String?.none)
+                    ForEach(vehicles) { v in
+                        Text("\(v.code) - \(v.plate ?? "Sin matrícula")")
+                            .tag(Optional(v.id))
                     }
-                } else {
-                    Picker("Vehículo", selection: $selectedVehicleId) {
-                        Text("— Sin asignar —").tag(nil as String?)
-                        ForEach(vehicles) { vehicle in
-                            Text("\(vehicle.code) (\(vehicle.type))")
-                                .tag(vehicle.id as String?)
-                        }
-                    }
-                    .pickerStyle(.menu)
                 }
+            } header: {
+                Text("Datos del Kit")
             }
             
-            // Botón: Crear Kit
-            HStack {
+            Section {
                 Button {
                     Task { await createKit() }
                 } label: {
-                    HStack(spacing: 8) {
-                        if isCreating {
+                    HStack {
+                        Spacer()
+                        if isProcessing {
                             ProgressView()
-                                .progressViewStyle(.circular)
-                                .scaleEffect(0.8)
-                                .tint(.white)
                         } else {
-                            Image(systemName: "plus.circle.fill")
+                            Label("Crear Kit", systemImage: "plus.circle.fill")
                         }
-                        Text("Crear Kit")
+                        Spacer()
                     }
-                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(code.isEmpty || name.isEmpty || isCreating)
+                .disabled(code.isEmpty || name.isEmpty || isProcessing)
             }
             
-            // Mensaje de éxito
-            if showSuccess {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("Kit creado correctamente")
-                        .foregroundStyle(.green)
-                }
-                .font(.caption)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-            
-            // Mensaje de error
             if let error = errorMessage {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
+                Section {
                     Text(error)
                         .foregroundStyle(.red)
                 }
-                .font(.caption)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.vertical, 8)
-        .animation(.easeInOut(duration: 0.3), value: showSuccess)
-        .animation(.easeInOut(duration: 0.3), value: errorMessage)
+        .navigationTitle("Nuevo Kit")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
-            await loadVehicles()
+            vehicles = await VehicleService.shared.getAllVehicles()
+        }
+        .alert("Kit Creado", isPresented: $showSuccess) {
+            Button("OK") { dismiss() }
+        } message: {
+            Text("El kit '\(name)' se ha creado correctamente.")
         }
     }
-    
-    // MARK: - Load Vehicles
-    
-    private func loadVehicles() async {
-        isLoadingVehicles = true
-        vehicles = await VehicleService.shared.getAllVehicles()
-        isLoadingVehicles = false
-    }
-    
-    // MARK: - Create Kit
     
     private func createKit() async {
-        isCreating = true
-        showSuccess = false
+        isProcessing = true
         errorMessage = nil
         
-        // Guardar valores en variables locales ANTES de limpiar el formulario
-        let kitCode = code.uppercased().trimmingCharacters(in: .whitespaces)
-        let kitName = name.trimmingCharacters(in: .whitespaces)
-        let kitType = selectedType
-        let vehicleId = selectedVehicleId
-        
         do {
-            // Crear kit usando KitService
             _ = try await KitService.shared.createKit(
-                code: kitCode,
-                name: kitName,
-                type: kitType,
-                vehicleId: vehicleId,
+                code: code,
+                name: name,
+                type: selectedType,
+                vehicleId: selectedVehicleId,
                 actor: currentUser
             )
-            
-            // Éxito: limpiar formulario
-            code = ""
-            name = ""
-            selectedVehicleId = nil
             showSuccess = true
-            
-            // Ocultar mensaje de éxito después de 3 segundos
-            try? await Task.sleep(for: .seconds(3))
-            showSuccess = false
-            
-        } catch let error as KitServiceError {
-            errorMessage = error.localizedDescription
         } catch {
-            errorMessage = "Error inesperado: \(error.localizedDescription)"
+            errorMessage = error.localizedDescription
         }
         
-        isCreating = false
+        isProcessing = false
+    }
+    
+    /// Icono para cada tipo de kit (solo los que existen en KitType)
+    private func iconFor(_ type: KitType) -> String {
+        switch type {
+        case .SVA: return "cross.case.fill"
+        case .SVAe: return "cross.case.fill"
+        case .SVB: return "shippingbox.fill"
+        case .custom: return "star.fill"
+        }
     }
 }
 
-// MARK: - ThresholdsEditor (Subvista privada)
+// MARK: - Create Vehicle Screen
 
-private struct ThresholdsEditor: View {
+struct CreateVehicleScreen: View {
+    let currentUser: UserFS
     
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var code = ""
+    @State private var plate = ""
+    @State private var selectedType: VehicleFS.VehicleType = .svb
+    @State private var bases: [BaseFS] = []
+    @State private var selectedBaseId: String?
+    @State private var isProcessing = false
+    @State private var errorMessage: String?
+    @State private var showSuccess = false
+    
+    var body: some View {
+        Form {
+            Section {
+                TextField("Código (ej: AMB-001)", text: $code)
+                    .textInputAutocapitalization(.characters)
+                
+                TextField("Matrícula", text: $plate)
+                    .textInputAutocapitalization(.characters)
+                
+                Picker("Tipo", selection: $selectedType) {
+                    ForEach(VehicleFS.VehicleType.allCases, id: \.self) { type in
+                        Text(type.shortName).tag(type)
+                    }
+                }
+                
+                Picker("Base", selection: $selectedBaseId) {
+                    Text("— Sin asignar —").tag(String?.none)
+                    ForEach(bases) { base in
+                        Text(base.name).tag(Optional(base.id))
+                    }
+                }
+            } header: {
+                Text("Datos del Vehículo")
+            }
+            
+            Section {
+                Button {
+                    Task { await createVehicle() }
+                } label: {
+                    HStack {
+                        Spacer()
+                        if isProcessing {
+                            ProgressView()
+                        } else {
+                            Label("Crear Vehículo", systemImage: "plus.circle.fill")
+                        }
+                        Spacer()
+                    }
+                }
+                .disabled(code.isEmpty || isProcessing)
+            }
+            
+            if let error = errorMessage {
+                Section {
+                    Text(error)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle("Nuevo Vehículo")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            bases = await BaseService.shared.getAllBases()
+        }
+        .alert("Vehículo Creado", isPresented: $showSuccess) {
+            Button("OK") { dismiss() }
+        } message: {
+            Text("El vehículo '\(code)' se ha creado correctamente.")
+        }
+    }
+    
+    private func createVehicle() async {
+        isProcessing = true
+        errorMessage = nil
+        
+        do {
+            // Usar VehicleService.create() - NO createVehicle()
+            _ = try await VehicleService.shared.create(
+                code: code,
+                plate: plate.isEmpty ? nil : plate,
+                type: selectedType.rawValue,
+                baseId: selectedBaseId,
+                actor: currentUser
+            )
+            showSuccess = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        
+        isProcessing = false
+    }
+}
+
+// MARK: - Thresholds List Screen
+
+struct ThresholdsListScreen: View {
     let currentUser: UserFS
     
     @State private var kits: [KitFS] = []
     @State private var isLoading = true
-    @State private var errorMessage: String?
-    @State private var searchText = ""
-    
-    private var filteredKits: [KitFS] {
-        guard !searchText.isEmpty else { return kits }
-        
-        let lowercased = searchText.lowercased()
-        return kits.filter {
-            $0.code.lowercased().contains(lowercased) ||
-            $0.name.lowercased().contains(lowercased)
-        }
-    }
     
     var body: some View {
         Group {
             if isLoading {
-                loadingView
-            } else if let error = errorMessage {
-                errorView(message: error)
+                ProgressView("Cargando kits...")
             } else if kits.isEmpty {
-                emptyView
+                ContentUnavailableView(
+                    "Sin kits",
+                    systemImage: "shippingbox",
+                    description: Text("No hay kits para configurar.")
+                )
             } else {
-                kitsListView
+                List(kits) { kit in
+                    NavigationLink {
+                        ThresholdEditorScreen(kit: kit, currentUser: currentUser)
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.orange.opacity(0.15))
+                                    .frame(width: 40, height: 40)
+                                
+                                Image(systemName: "slider.horizontal.3")
+                                    .foregroundStyle(.orange)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(kit.name)
+                                    .font(.headline)
+                                Text(kit.code)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Editar Umbrales")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            kits = await KitService.shared.getAllKits()
+            isLoading = false
+        }
+    }
+}
+
+// MARK: - Users List Screen (Placeholder)
+
+struct UsersListScreen: View {
+    let currentUser: UserFS
+    
+    @State private var users: [UserFS] = []
+    @State private var isLoading = true
+    
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView("Cargando usuarios...")
+            } else if users.isEmpty {
+                ContentUnavailableView(
+                    "Sin usuarios",
+                    systemImage: "person.2",
+                    description: Text("No hay usuarios registrados.")
+                )
+            } else {
+                List(users) { user in
+                    HStack(spacing: 12) {
+                        // Avatar
+                        ZStack {
+                            Circle()
+                                .fill(Color.purple.opacity(0.15))
+                                .frame(width: 44, height: 44)
+                            
+                            Text(user.fullName.prefix(1).uppercased())
+                                .font(.headline)
+                                .foregroundStyle(.purple)
+                        }
+                        
+                        // Info
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(user.fullName)
+                                .font(.headline)
+                            
+                            Text("@\(user.username)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        // Status
+                        Circle()
+                            .fill(user.active ? Color.green : Color.red)
+                            .frame(width: 10, height: 10)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Usuarios")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    // TODO: Crear usuario
+                } label: {
+                    Image(systemName: "plus")
+                }
             }
         }
         .task {
-            await loadKits()
+            users = await UserService.shared.getAllUsers()
+            isLoading = false
         }
-    }
-    
-    private var loadingView: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .scaleEffect(0.8)
-            Text("Cargando kits...")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 16)
-    }
-    
-    private func errorView(message: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.title2)
-                .foregroundStyle(.orange)
-            
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Button("Reintentar") {
-                Task { await loadKits() }
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(.vertical, 16)
-    }
-    
-    private var emptyView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "shippingbox")
-                .font(.title)
-                .foregroundStyle(.secondary)
-            
-            Text("No hay kits")
-                .font(.headline)
-            
-            Text("Crea tu primer kit en la sección superior.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 16)
-    }
-    
-    private var kitsListView: some View {
-        VStack(spacing: 0) {
-            if kits.count > 3 {
-                TextField("Buscar kit...", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.bottom, 8)
-            }
-            
-            ForEach(filteredKits) { kit in
-                NavigationLink {
-                    ThresholdEditorScreen(kit: kit, currentUser: currentUser)
-                } label: {
-                    kitRow(kit)
-                }
-            }
-            
-            if filteredKits.isEmpty && !searchText.isEmpty {
-                Text("No se encontraron kits con '\(searchText)'")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
-            }
-        }
-    }
-    
-    private func kitRow(_ kit: KitFS) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: kitIcon(for: kit.type))
-                .font(.title2)
-                .foregroundStyle(.blue)
-                .frame(width: 36)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(kit.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                
-                HStack(spacing: 8) {
-                    Text(kit.code)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    Text("•")
-                        .foregroundStyle(.secondary)
-                    
-                    Text(kit.type)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundStyle(.blue)
-                        .clipShape(Capsule())
-                }
-            }
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, 8)
-    }
-    
-    /// KitType: SVB, SVAe, SVA, custom
-    private func kitIcon(for typeString: String) -> String {
-        switch typeString {
-        case "SVA":
-            return "cross.case.fill"
-        case "SVAe":
-            return "cross.case.fill"
-        case "SVB":
-            return "shippingbox.fill"
-        case "custom":
-            return "square.grid.2x2.fill"
-        default:
-            return "shippingbox"
-        }
-    }
-    
-    private func loadKits() async {
-        isLoading = true
-        errorMessage = nil
-        kits = await KitService.shared.getAllKits()
-        isLoading = false
     }
 }
 
 // MARK: - Preview
 
-#if DEBUG
-struct AdminView_Previews: PreviewProvider {
-    static var previews: some View {
-        AdminView(currentUser: previewProgrammer)
-            .previewDisplayName("Programador")
-    }
-    
-    static let previewProgrammer = UserFS(
-        id: "user_prog",
-        uid: "uid_prog",
-        username: "admin",
-        fullName: "Administrador",
-        email: "admin@ambukit.com",
-        active: true,
-        roleId: "role_programmer",
-        baseId: nil
+#Preview("Programmer") {
+    var user = UserFS(
+        id: "1", uid: "uid1", username: "admin",
+        fullName: "Admin User", email: "admin@test.com",
+        active: true, roleId: "role_programmer", baseId: nil
     )
+    user.role = RoleFS(id: "role_programmer", kind: .programmer, displayName: "Programador")
+    
+    return AdminView(currentUser: user)
 }
-#endif
+
+#Preview("Logistics") {
+    var user = UserFS(
+        id: "2", uid: "uid2", username: "logistica",
+        fullName: "Logística User", email: "log@test.com",
+        active: true, roleId: "role_logistics", baseId: nil
+    )
+    user.role = RoleFS(id: "role_logistics", kind: .logistics, displayName: "Logística")
+    
+    return AdminView(currentUser: user)
+}
