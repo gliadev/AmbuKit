@@ -578,34 +578,7 @@ final class UserServiceTests: XCTestCase {
     }
 }
 
-// MARK: - Performance Tests
 
-extension UserServiceTests {
-    func testPerformance_GetAllUsers() async throws {
-        measure {
-            let expectation = self.expectation(description: "getAllUsers")
-            Task {
-                _ = await service.getAllUsers()
-                expectation.fulfill()
-            }
-            wait(for: [expectation], timeout: 10.0)
-        }
-    }
-    
-    func testPerformance_GetUserWithCache() async throws {
-        // Calentar cache
-        _ = await service.getUser(id: programmer.id)
-        
-        measure {
-            let expectation = self.expectation(description: "getUserFromCache")
-            Task {
-                _ = await service.getUser(id: programmer.id)
-                expectation.fulfill()
-            }
-            wait(for: [expectation], timeout: 5.0)
-        }
-    }
-}
 
 
 

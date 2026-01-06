@@ -3,14 +3,29 @@
 //  AmbuKit
 //
 //  Created by Adolfo on 9/12/25.
+//  Updated: 27/12/25 - Añadidas animaciones SF Symbols (iOS 17+)
 //
 
 import SwiftUI
 
 // MARK: - ErrorView
 
-/// Vista reutilizable para mostrar errores con opción de reintentar
-/// Diseñada para ser consistente en toda la app
+/// Vista reutilizable para mostrar errores con animación de feedback
+///
+/// ## ❌ ANTES (estático):
+/// ```swift
+/// Image(systemName: icon)
+///     .font(.system(size: 48))
+///     .foregroundStyle(iconColor)
+/// ```
+///
+/// ## ✅ DESPUÉS (animado):
+/// ```swift
+/// Image(systemName: icon)
+///     .font(.system(size: 48))
+///     .foregroundStyle(iconColor)
+///     .symbolEffect(.bounce, value: animationTrigger)  // 🎯 Bounce al aparecer
+/// ```
 struct ErrorView: View {
     
     // MARK: - Properties
@@ -21,27 +36,41 @@ struct ErrorView: View {
     /// Mensaje descriptivo del error
     let message: String
     
-    /// Icono SF Symbol a mostrar (default: exclamationmark.triangle)
+    /// Icono SF Symbol a mostrar
     var icon: String = "exclamationmark.triangle"
     
-    /// Color del icono (default: red)
+    /// Color del icono
     var iconColor: Color = .red
     
-    /// Acción al pulsar "Reintentar" (opcional)
+    /// Acción al pulsar "Reintentar"
     var retryAction: (() -> Void)?
     
     /// Texto del botón de reintentar
     var retryButtonText: String = "Reintentar"
     
+    /// Trigger para animación de bounce
+    @State private var animationTrigger = false
+    
+    /// Trigger para animación del botón
+    @State private var buttonTrigger = false
+    
     // MARK: - Body
     
     var body: some View {
         VStack(spacing: 20) {
-            // Icono
-            Image(systemName: icon)
-                .font(.system(size: 48))
-                .foregroundStyle(iconColor)
-                .symbolRenderingMode(.hierarchical)
+            // ✅ DESPUÉS: Icono con animación bounce
+            if #available(iOS 17.0, *) {
+                Image(systemName: icon)
+                    .font(.system(size: 48))
+                    .foregroundStyle(iconColor)
+                    .symbolRenderingMode(.hierarchical)
+                    .symbolEffect(.bounce, value: animationTrigger)  // 🎯 Bounce al aparecer
+            } else {
+                // Fallback iOS 16
+                Image(systemName: icon)
+                    .font(.system(size: 48))
+                    .foregroundStyle(iconColor)
+            }
             
             // Textos
             VStack(spacing: 8) {
@@ -56,13 +85,19 @@ struct ErrorView: View {
                     .lineLimit(4)
             }
             
-            // Botón de reintentar
+            // Botón de reintentar con animación
             if let action = retryAction {
                 Button {
+                    buttonTrigger.toggle()  // Trigger animación
                     action()
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
+                        if #available(iOS 17.0, *) {
+                            Image(systemName: "arrow.clockwise")
+                                .symbolEffect(.rotate, value: buttonTrigger)  // 🎯 Rotación al pulsar
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
                         Text(retryButtonText)
                     }
                     .font(.body.weight(.medium))
@@ -73,20 +108,27 @@ struct ErrorView: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            // Disparar animación al aparecer
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                animationTrigger = true
+            }
+        }
     }
 }
 
 // MARK: - Convenience Initializers
 
 extension ErrorView {
-    /// Inicializador simple con solo mensaje y acción
+    
+    /// Inicializador simple con solo mensaje
     init(_ message: String, retryAction: (() -> Void)? = nil) {
         self.title = "Error"
         self.message = message
         self.retryAction = retryAction
     }
     
-    /// Inicializador para errores de red
+    /// Error de red/conexión
     static func networkError(retryAction: @escaping () -> Void) -> ErrorView {
         ErrorView(
             title: "Sin conexión",
@@ -97,56 +139,61 @@ extension ErrorView {
         )
     }
     
-    /// Inicializador para errores de permisos
+    /// Error de permisos
     static func permissionError() -> ErrorView {
         ErrorView(
             title: "Sin permisos",
             message: "No tienes permisos para realizar esta acción.",
-            icon: "lock.shield",
-            iconColor: .red,
-            retryAction: nil
+            icon: "lock.fill",
+            iconColor: .purple
         )
     }
     
-    /// Inicializador para item no encontrado
-    static func notFound(itemName: String) -> ErrorView {
+    /// Error de sincronización
+    static func syncError(retryAction: @escaping () -> Void) -> ErrorView {
         ErrorView(
-            title: "No encontrado",
-            message: "\(itemName) no existe o fue eliminado.",
-            icon: "magnifyingglass",
-            iconColor: .secondary,
-            retryAction: nil
+            title: "Error de sincronización",
+            message: "No se pudieron sincronizar los datos. Inténtalo de nuevo.",
+            icon: "arrow.triangle.2.circlepath.circle",
+            iconColor: .blue,
+            retryAction: retryAction
+        )
+    }
+    
+    /// Error genérico con mensaje personalizado
+    static func custom(title: String, message: String, icon: String = "exclamationmark.circle", color: Color = .red, retryAction: (() -> Void)? = nil) -> ErrorView {
+        ErrorView(
+            title: title,
+            message: message,
+            icon: icon,
+            iconColor: color,
+            retryAction: retryAction
         )
     }
 }
 
-// MARK: - Preview
+// MARK: - Previews
 
-#if DEBUG
-#Preview("Error Genérico") {
+#Preview("ErrorView – Default") {
     ErrorView(
-        title: "Error al cargar",
-        message: "No se pudieron cargar los datos. Por favor intenta de nuevo.",
-        retryAction: { print("Retry tapped") }
+        title: "Error",
+        message: "Ha ocurrido un error inesperado.",
+        retryAction: { print("Retry") }
     )
 }
 
-#Preview("Error de Red") {
-    ErrorView.networkError(retryAction: { print("Retry tapped") })
+#Preview("ErrorView – Network") {
+    ErrorView.networkError {
+        print("Retry network")
+    }
 }
 
-#Preview("Error de Permisos") {
+#Preview("ErrorView – Permission") {
     ErrorView.permissionError()
 }
 
-#Preview("No Encontrado") {
-    ErrorView.notFound(itemName: "El kit")
+#Preview("ErrorView – Sync") {
+    ErrorView.syncError {
+        print("Retry sync")
+    }
 }
-
-#Preview("Sin Botón Reintentar") {
-    ErrorView(
-        title: "Error fatal",
-        message: "Algo salió muy mal y no se puede recuperar."
-    )
-}
-#endif

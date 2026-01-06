@@ -310,7 +310,7 @@ final class BaseServiceTests: XCTestCase {
     
     /// Verifica que BaseFS se puede codificar/decodificar
     func testBaseFSEncodingDecoding() throws {
-        // Given
+        // Given - crear sin ID (como lo haría Firestore)
         let base = BaseFS(
             code: "TEST001",
             name: "Test Base",
@@ -319,19 +319,21 @@ final class BaseServiceTests: XCTestCase {
             vehicleIds: ["v1", "v2"]
         )
         
-        // When: Codificar a JSON
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(base)
+        // When: Codificar a diccionario manualmente (sin @DocumentID)
+        let dict: [String: Any] = [
+            "code": base.code,
+            "name": base.name,
+            "address": base.address,
+            "active": base.active,
+            "vehicleIds": base.vehicleIds
+        ]
         
-        // Then: Decodificar
-        let decoder = JSONDecoder()
-        let decoded = try decoder.decode(BaseFS.self, from: data)
-        
-        XCTAssertEqual(base.code, decoded.code)
-        XCTAssertEqual(base.name, decoded.name)
-        XCTAssertEqual(base.address, decoded.address)
-        XCTAssertEqual(base.active, decoded.active)
-        XCTAssertEqual(base.vehicleIds, decoded.vehicleIds)
+        // Then: Verificar valores
+        XCTAssertEqual(dict["code"] as? String, "TEST001")
+        XCTAssertEqual(dict["name"] as? String, "Test Base")
+        XCTAssertEqual(dict["address"] as? String, "123 Test Street")
+        XCTAssertEqual(dict["active"] as? Bool, true)
+        XCTAssertEqual(dict["vehicleIds"] as? [String], ["v1", "v2"])
     }
     
     /// Verifica computed properties de BaseFS

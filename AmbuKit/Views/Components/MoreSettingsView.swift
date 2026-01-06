@@ -5,15 +5,15 @@
 //  Created by Adolfo on 26/12/25.
 //
 //  TAREA 16.9: Menú "Más" con opciones de gestión
-//  INSTRUCCIONES: REEMPLAZA el archivo existente Views/More/MoreMenuView.swift
-//                 o el archivo donde esté definido MoreMenuView
+//  
+//
 //
 
 import SwiftUI
 
 // MARK: - More Menu View
 
-struct MoreMenuView: View {
+struct MoreSettingsView: View {
     let currentUser: UserFS
     
     // Permisos (calculados en onAppear)
@@ -136,7 +136,7 @@ struct MoreMenuView: View {
                 // Gestión de Vehículos
                 if canManageVehicles {
                     NavigationLink {
-                        VehicleMgmtView(currentUser: currentUser)
+                        VehicleManagementView(currentUser: currentUser)
                     } label: {
                         MoreMenuCardView(
                             title: "Vehículos",
@@ -151,7 +151,7 @@ struct MoreMenuView: View {
                 // Gestión de Usuarios
                 if canManageUsers {
                     NavigationLink {
-                        UserMgmtView(currentUser: currentUser)
+                        UserManagementView(currentUser: currentUser)  // ✅ CORREGIDO
                     } label: {
                         MoreMenuCardView(
                             title: "Usuarios",
@@ -352,5 +352,83 @@ struct MoreMenuCardDisabledView: View {
         fullName: "Administrador", email: "admin@test.com",
         active: true, roleId: "role_programmer", baseId: nil
     )
-    return MoreMenuView(currentUser: user)
+    MoreSettingsView(currentUser: user)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

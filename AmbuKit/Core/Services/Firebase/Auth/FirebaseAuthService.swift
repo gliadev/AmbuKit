@@ -130,6 +130,8 @@ final class FirebaseAuthService: ObservableObject {
             // 4. Actualizar usuario actual
             currentUser = user
             isLoading = false
+            // pre-cargar datos comunes en cache
+            await AppCache.shared.preloadCommonData()
             
             print("✅ Datos de usuario cargados: @\(user.username)")
             
@@ -164,6 +166,7 @@ final class FirebaseAuthService: ObservableObject {
             
             // Limpiar caché de UserService
             userService.clearCache()
+            AppCache.shared.invalidateAll()
             
             print("✅ Logout exitoso")
             

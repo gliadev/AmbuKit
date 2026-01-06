@@ -8,6 +8,7 @@
 import Foundation
 import FirebaseFirestore
 
+
 /// Gestor de listeners en tiempo real de Firestore
 /// Compatible con Swift 6 strict concurrency
 ///
@@ -28,7 +29,7 @@ import FirebaseFirestore
 /// RealtimeManager.shared.cleanup()
 /// ```
 @MainActor
-final class RealtimeManager: ObservableObject {
+final class RealtimeManager {
     
     // MARK: - Singleton
     
@@ -40,7 +41,7 @@ final class RealtimeManager: ObservableObject {
     private var listeners: [String: ListenerRegistration] = [:]
     
     /// Número de listeners activos
-    @Published private(set) var activeListenersCount: Int = 0
+     private(set) var activeListenersCount: Int = 0
     
     // MARK: - Initialization
     
@@ -75,7 +76,7 @@ final class RealtimeManager: ObservableObject {
         
         // Crear listener
         let listener = query.addSnapshotListener { [weak self] snapshot, error in
-            guard let self = self else { return }
+            guard self != nil else { return }
             
             Task { @MainActor in
                 if let error = error {
@@ -126,7 +127,7 @@ final class RealtimeManager: ObservableObject {
         let listener = db.collection(collectionPath)
             .whereField(field, isEqualTo: value)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
+                guard self != nil else { return }
                 
                 Task { @MainActor in
                     if let error = error {
@@ -172,7 +173,7 @@ final class RealtimeManager: ObservableObject {
         let listener = db.collection(collectionPath)
             .document(documentId)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
+                guard self != nil else { return }
                 
                 Task { @MainActor in
                     if let error = error {

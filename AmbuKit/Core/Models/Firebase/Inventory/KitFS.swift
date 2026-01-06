@@ -23,10 +23,10 @@ public struct KitFS: Codable, Identifiable, Sendable {
     public let code: String
     
     /// Nombre del kit
-    public let name: String
+    public var name: String
     
     /// Tipo de kit (ej: "emergency", "trauma", etc.)
-    public let type: String
+    public var type: String
     
     /// Estado actual del kit
     public var status: Status
@@ -41,7 +41,7 @@ public struct KitFS: Codable, Identifiable, Sendable {
     public var itemIds: [String]
     
     /// Fecha de creación
-    public let createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
     public var updatedAt: Date

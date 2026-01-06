@@ -4,48 +4,62 @@
 //
 //  Created by Adolfo on 12/11/25.
 //
-
+//  TAREA 16.2: Vista de inventario mejorada - 100% Firebase
+//
+//  Características:
+//  - Badges de estado coloridos
+//  - Iconos por tipo de kit
+//  - Búsqueda
+//  - Pull to refresh
+//  - Filtros
+//
 
 import SwiftUI
 
-// MARK: - InventoryView (Firebase)
+// MARK: - InventoryView
 
-/// Vista principal de inventario de kits
-/// Muestra lista de todos los kits desde Firebase con estados de carga y error
+/// Vista principal del inventario de kits - 100% Firebase
 struct InventoryView: View {
     
     // MARK: - Properties
     
-    /// Usuario actual (Firebase)
     let currentUser: UserFS
     
     // MARK: - State
     
-    /// Lista de kits cargados desde Firebase
     @State private var kits: [KitFS] = []
-    
-    /// Indica si está cargando datos iniciales
     @State private var isLoading = true
-    
-    /// Mensaje de error si la carga falla
-    @State private var errorMessage: String?
-    
-    /// Indica si está refrescando (pull to refresh)
-    @State private var isRefreshing = false
-    
-    /// Texto de búsqueda para filtrar kits
     @State private var searchText = ""
+    @State private var selectedFilter: KitFilter = .all
     
-    // MARK: - Computed Properties
+    // MARK: - Filtered Kits
     
-    /// Kits filtrados por búsqueda
     private var filteredKits: [KitFS] {
-        guard !searchText.isEmpty else { return kits }
-        let lowercased = searchText.lowercased()
-        return kits.filter {
-            $0.code.lowercased().contains(lowercased) ||
-            $0.name.lowercased().contains(lowercased)
+        var result = kits
+        
+        // Aplicar filtro
+        switch selectedFilter {
+        case .all:
+            break
+        case .active:
+            result = result.filter { $0.status == .active }
+        case .needsAudit:
+            result = result.filter { $0.needsAudit }
+        case .unassigned:
+            result = result.filter { !$0.isAssigned }
+        case .maintenance:
+            result = result.filter { $0.status == .maintenance }
         }
+        
+        // Aplicar búsqueda
+        if !searchText.isEmpty {
+            result = result.filter {
+                $0.code.localizedCaseInsensitiveContains(searchText) ||
+                $0.name.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+        
+        return result
     }
     
     // MARK: - Body
@@ -55,65 +69,78 @@ struct InventoryView: View {
             Group {
                 if isLoading {
                     loadingView
-                } else if let error = errorMessage {
-                    errorView(message: error)
                 } else if kits.isEmpty {
-                    emptyView
+                    emptyStateView
                 } else {
                     kitsList
                 }
             }
-            .navigationTitle("Kits")
-            .searchable(text: $searchText, prompt: "Buscar por código o nombre")
+            .navigationTitle("Inventario")
+            .searchable(text: $searchText, prompt: "Buscar kits...")
             .toolbar {
-                toolbarContent
+                ToolbarItem(placement: .primaryAction) {
+                    filterMenu
+                }
             }
-            .task {
-                await loadKits()
-            }
-            .refreshable {
-                await refreshKits()
-            }
+        }
+        .task {
+            await loadKits()
         }
     }
     
-    // MARK: - Subviews
+    // MARK: - Filter Menu
     
-    /// Vista de carga inicial
+    private var filterMenu: some View {
+        Menu {
+            ForEach(KitFilter.allCases, id: \.self) { filter in
+                Button {
+                    selectedFilter = filter
+                } label: {
+                    HStack {
+                        Text(filter.label)
+                        if selectedFilter == filter {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: selectedFilter == .all
+                  ? "line.3.horizontal.decrease.circle"
+                  : "line.3.horizontal.decrease.circle.fill")
+        }
+    }
+    
+    // MARK: - Loading View
+    
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .scaleEffect(1.2)
             Text("Cargando kits...")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    /// Vista de error con opción de reintentar
-    private func errorView(message: String) -> some View {
-        ErrorView(
-            title: "Error al cargar",
-            message: message,
-            retryAction: {
-                Task {
-                    await loadKits()
-                }
-            }
-        )
+    // MARK: - Empty State
+    
+    private var emptyStateView: some View {
+        ContentUnavailableView {
+            Label("No hay kits", systemImage: "shippingbox")
+        } description: {
+            Text("Añade kits desde la pestaña Gestión.")
+        }
     }
     
-    /// Vista cuando no hay kits
-    private var emptyView: some View {
-        EmptyStateView(
-            "No hay kits",
-            message: "Añade kits desde la pestaña Gestión (Programador)."
-        )
-    }
+    // MARK: - Kits List
     
-    /// Lista de kits
     private var kitsList: some View {
         List {
+            // Header con estadísticas
+            statsHeader
+            
+            // Lista de kits
             ForEach(filteredKits) { kit in
                 NavigationLink {
                     KitDetailView(kit: kit, currentUser: currentUser)
@@ -122,428 +149,257 @@ struct InventoryView: View {
                 }
             }
         }
-        .listStyle(.plain)
-        .overlay {
-            if filteredKits.isEmpty && !searchText.isEmpty {
-                EmptyStateView(
-                    "Sin resultados",
-                    message: "No hay kits que coincidan con '\(searchText)'"
+        .listStyle(.insetGrouped)
+        .refreshable {
+            await loadKits()
+        }
+    }
+    
+    // MARK: - Stats Header
+    
+    private var statsHeader: some View {
+        Section {
+            HStack(spacing: 12) {
+                StatBadge(
+                    count: kits.count,
+                    label: "Total",
+                    color: .blue,
+                    icon: "shippingbox.fill"
+                )
+                
+                StatBadge(
+                    count: kits.filter { $0.status == .active }.count,
+                    label: "Activos",
+                    color: .green,
+                    icon: "checkmark.circle.fill"
+                )
+                
+                StatBadge(
+                    count: kits.filter { $0.needsAudit }.count,
+                    label: "Auditoría",
+                    color: .purple,
+                    icon: "clipboard.fill"
+                )
+                
+                StatBadge(
+                    count: kits.filter { !$0.isAssigned }.count,
+                    label: "Libres",
+                    color: .orange,
+                    icon: "car.fill"
                 )
             }
+            .padding(.vertical, 8)
         }
     }
     
-    /// Contenido del toolbar
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                Task { await refreshKits() }
-            } label: {
-                Label("Actualizar", systemImage: "arrow.clockwise")
-            }
-            .disabled(isRefreshing || isLoading)
-        }
-    }
+    // MARK: - Load Kits
     
-    // MARK: - Data Loading
-    
-    /// Carga inicial de kits desde Firebase
     private func loadKits() async {
-        isLoading = true
-        errorMessage = nil
-        
-        // Cargar kits ordenados por código
-        let loadedKits = await KitService.shared.getAllKits()
-        
-        // Actualizar UI
-        kits = loadedKits
+        isLoading = kits.isEmpty
+        kits = await KitService.shared.getAllKits()
         isLoading = false
-        
-        // Si no hay kits y esperábamos datos, podría ser un error silencioso
-        // pero en este caso getAllKits() devuelve [] si hay error
-    }
-    
-    /// Refresca los kits (pull to refresh o botón)
-    private func refreshKits() async {
-        isRefreshing = true
-        
-        // Limpiar cache para forzar recarga
-        KitService.shared.clearKitCache()
-        
-        // Recargar
-        let loadedKits = await KitService.shared.getAllKits()
-        kits = loadedKits
-        
-        isRefreshing = false
     }
 }
 
-// MARK: - KitRowView
+// MARK: - Kit Filter Enum
 
-/// Fila individual de kit en la lista
-private struct KitRowView: View {
+enum KitFilter: CaseIterable {
+    case all
+    case active
+    case needsAudit
+    case unassigned
+    case maintenance
+    
+    var label: String {
+        switch self {
+        case .all: return "Todos"
+        case .active: return "Activos"
+        case .needsAudit: return "Auditoría"
+        case .unassigned: return "Sin Asignar"
+        case .maintenance: return "Mantenimiento"
+        }
+    }
+}
+
+// MARK: - Stat Badge
+
+struct StatBadge: View {
+    let count: Int
+    let label: String
+    let color: Color
+    let icon: String
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text("\(count)")
+                    .font(.title3.bold())
+            }
+            .foregroundStyle(color)
+            
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Kit Row View
+
+struct KitRowView: View {
     let kit: KitFS
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            // Icono del tipo de kit
+            kitTypeIcon
+            
+            // Info principal
             VStack(alignment: .leading, spacing: 4) {
-                Text(kit.name)
-                    .font(.body)
-                
-                HStack(spacing: 8) {
-                    // Código
+                // Código y badge de estado
+                HStack {
                     Text(kit.code)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    // Badge de estado si no es "ok"
-                    if kit.status != .active {
-                        Text(kit.status.rawValue.uppercased())
-                            .font(.caption2.bold())
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(kit.status == .maintenance ? .red : .orange)
-                            .cornerRadius(4)
+                    Spacer()
+                    
+                    statusBadge
+                }
+                
+                // Nombre
+                Text(kit.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                
+                // Info adicional
+                HStack(spacing: 8) {
+                    // Tipo de kit
+                    Text(kit.type)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(kitTypeColor.opacity(0.1))
+                        .foregroundStyle(kitTypeColor)
+                        .clipShape(Capsule())
+                    
+                    // Asignación
+                    if kit.isAssigned {
+                        HStack(spacing: 2) {
+                            Image(systemName: "car.fill")
+                            Text("Asignado")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    }
+                    
+                    // Auditoría
+                    if kit.needsAudit {
+                        HStack(spacing: 2) {
+                            Image(systemName: "clipboard")
+                            Text("Auditar")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.purple)
                     }
                 }
             }
-            
-            Spacer()
-            
-            // Tipo de kit
-            Text(kit.type)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary)
-                .cornerRadius(6)
         }
         .padding(.vertical, 4)
     }
-}
-
-// MARK: - KitDetailView (Firebase)
-
-/// Vista de detalle de un kit con sus items
-/// Permite ver y modificar cantidades de stock
-struct KitDetailView: View {
     
-    // MARK: - Environment
+    // MARK: - Kit Type Icon
     
-    @Environment(\.dismiss) private var dismiss
-    
-    // MARK: - Properties
-    
-    /// Kit a mostrar (Firebase)
-    let kit: KitFS
-    
-    /// Usuario actual (Firebase)
-    let currentUser: UserFS
-    
-    // MARK: - State
-    
-    /// Items del kit
-    @State private var items: [KitItemFS] = []
-    
-    /// Cache de items del catálogo (id -> CatalogItemFS)
-    @State private var catalogItems: [String: CatalogItemFS] = [:]
-    
-    /// Indica si está cargando
-    @State private var isLoading = true
-    
-    /// Mensaje de error
-    @State private var errorMessage: String?
-    
-    /// ID del item que se está actualizando (para mostrar spinner)
-    @State private var updatingItemId: String?
-    
-    /// Indica si se puede eliminar el kit
-    @State private var canDeleteKit = false
-    
-    /// Indica si se puede actualizar stock
-    @State private var canUpdateStock = false
-    
-    /// Alerta de confirmación para eliminar
-    @State private var showDeleteConfirmation = false
-    
-    /// Alerta de error
-    @State private var showError = false
-    @State private var alertErrorMessage = ""
-    
-    // MARK: - Body
-    
-    var body: some View {
-        Group {
-            if isLoading {
-                loadingView
-            } else if let error = errorMessage {
-                errorView(message: error)
-            } else if items.isEmpty {
-                emptyView
-            } else {
-                itemsList
-            }
-        }
-        .navigationTitle(kit.name)
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            toolbarContent
-        }
-        .task {
-            await loadData()
-        }
-        .refreshable {
-            await refreshItems()
-        }
-        .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(alertErrorMessage)
-        }
-        .alert("Eliminar Kit", isPresented: $showDeleteConfirmation) {
-            Button("Cancelar", role: .cancel) { }
-            Button("Eliminar", role: .destructive) {
-                Task { await deleteKit() }
-            }
-        } message: {
-            Text("¿Estás seguro de eliminar '\(kit.name)'? Esta acción no se puede deshacer.")
-        }
-    }
-    
-    // MARK: - Subviews
-    
-    private var loadingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.2)
-            Text("Cargando items...")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-    
-    private func errorView(message: String) -> some View {
-        ErrorView(
-            title: "Error al cargar",
-            message: message,
-            retryAction: {
-                Task { await loadData() }
-            }
-        )
-    }
-    
-    private var emptyView: some View {
-        EmptyStateView(
-            "Sin items",
-            message: "Este kit no tiene items configurados."
-        )
-    }
-    
-    private var itemsList: some View {
-        List {
-            // Sección de información del kit
-            Section {
-                kitInfoRow(title: "Código", value: kit.code)
-                kitInfoRow(title: "Tipo", value: kit.type)
-                kitInfoRow(title: "Estado", value: kit.status.rawValue.capitalized)
-                
-                if let lastAudit = kit.lastAudit {
-                    kitInfoRow(
-                        title: "Última auditoría",
-                        value: lastAudit.formatted(date: .abbreviated, time: .omitted)
-                    )
-                }
-            } header: {
-                Text("Información")
-            }
+    @ViewBuilder
+    private var kitTypeIcon: some View {
+        ZStack {
+            Circle()
+                .fill(kitTypeColor.opacity(0.15))
+                .frame(width: 44, height: 44)
             
-            // Sección de items
-            Section {
-                ForEach(items) { item in
-                    KitItemRow(
-                        item: item,
-                        catalogItem: catalogItems[item.catalogItemId ?? ""],
-                        isUpdating: updatingItemId == item.id,
-                        canEdit: canUpdateStock,
-                        onQuantityChange: { newQty in
-                            await updateQuantity(item: item, newQuantity: newQty)
-                        }
-                    )
-                }
-            } header: {
-                HStack {
-                    Text("Items (\(items.count))")
-                    Spacer()
-                    stockSummary
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-    }
-    
-    /// Fila de información del kit
-    private func kitInfoRow(title: String, value: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
+            Image(systemName: kitTypeSystemImage)
+                .font(.title3)
+                .foregroundStyle(kitTypeColor)
         }
     }
     
-    /// Resumen de stock (bajo/sobre)
-    private var stockSummary: some View {
-        let lowCount = items.filter { $0.isBelowMinimum }.count
-        let overCount = items.filter { $0.isAboveMaximum }.count
+    /// Icono del sistema según el tipo de kit
+    private var kitTypeSystemImage: String {
+        let type = kit.type.lowercased()
         
-        return HStack(spacing: 8) {
-            if lowCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.down.circle.fill")
-                    Text("\(lowCount)")
-                }
-                .font(.caption.bold())
-                .foregroundStyle(.red)
-            }
-            
-            if overCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.up.circle.fill")
-                    Text("\(overCount)")
-                }
-                .font(.caption.bold())
-                .foregroundStyle(.orange)
-            }
+        if type.contains("sva") {
+            return "cross.case.fill"
+        } else if type.contains("svb") {
+            return "shippingbox.fill"
+        } else if type.contains("ped") {
+            return "figure.and.child.holdinghands"
+        } else if type.contains("trauma") {
+            return "bandage.fill"
+        } else if type.contains("ampul") {
+            return "pills.fill"
+        } else {
+            return "cross.case.fill"
         }
     }
     
-    /// Contenido del toolbar
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        if canDeleteKit {
-            ToolbarItem(placement: .destructiveAction) {
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Label("Eliminar", systemImage: "trash")
-                }
-            }
+    /// Color según el tipo de kit
+    private var kitTypeColor: Color {
+        let type = kit.type.lowercased()
+        
+        if type.contains("sva") {
+            return .red
+        } else if type.contains("svb") {
+            return .blue
+        } else if type.contains("ped") {
+            return .pink
+        } else if type.contains("trauma") {
+            return .orange
+        } else if type.contains("ampul") {
+            return .purple
+        } else {
+            return .blue
         }
     }
     
-    // MARK: - Data Loading
+    // MARK: - Status Badge
     
-    /// Carga inicial de datos
-    private func loadData() async {
-        isLoading = true
-        errorMessage = nil
-        
-        // Cargar permisos en paralelo con los datos
-        async let permDeleteTask = AuthorizationServiceFS.allowed(.delete, on: .kit, for: currentUser)
-        async let permUpdateTask = AuthorizationServiceFS.allowed(.update, on: .kitItem, for: currentUser)
-        async let itemsTask = KitService.shared.getKitItems(kitId: kit.id ?? "")
-        async let catalogTask = CatalogService.shared.getAllItems()
-        
-        // Esperar resultados
-        canDeleteKit = await permDeleteTask
-        canUpdateStock = await permUpdateTask
-        items = await itemsTask
-        
-        // Construir diccionario de catálogo
-        let allCatalogItems: [CatalogItemFS] = await catalogTask
-        var newCatalogItems: [String: CatalogItemFS] = [:]
-        for item in allCatalogItems {
-            if let id = item.id {
-                newCatalogItems[id] = item
-            }
-        }
-        catalogItems = newCatalogItems
-        
-        isLoading = false
+    @ViewBuilder
+    private var statusBadge: some View {
+        Text(kit.status.displayName)
+            .font(.caption.bold())
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(statusColor.opacity(0.15))
+            .foregroundStyle(statusColor)
+            .clipShape(Capsule())
     }
     
-    /// Refresca los items
-    private func refreshItems() async {
-        KitService.shared.clearKitItemCache()
-        items = await KitService.shared.getKitItems(kitId: kit.id ?? "")
-    }
-    
-    // MARK: - Actions
-    
-    /// Actualiza la cantidad de un item (actualización optimista)
-    private func updateQuantity(item: KitItemFS, newQuantity: Double) async {
-        guard let itemId = item.id else { return }
-        
-        // Guardar valor original para posible rollback
-        let originalQuantity = item.quantity
-        
-        // 1. Actualización optimista del UI
-        if let index = items.firstIndex(where: { $0.id == itemId }) {
-            items[index].quantity = newQuantity
-        }
-        
-        // 2. Mostrar indicador de carga
-        updatingItemId = itemId
-        
-        // 3. Actualizar en Firebase
-        do {
-            var updatedItem = item
-            updatedItem.quantity = newQuantity
-            updatedItem.updatedAt = Date()
-            
-            try await KitService.shared.updateKitItem(kitItem: updatedItem, actor: currentUser)
-            
-        } catch {
-            // 4. Rollback si falla
-            if let index = items.firstIndex(where: { $0.id == itemId }) {
-                items[index].quantity = originalQuantity
-            }
-            
-            // Mostrar error
-            alertErrorMessage = "Error al actualizar: \(error.localizedDescription)"
-            showError = true
-        }
-        
-        // 5. Quitar indicador de carga
-        updatingItemId = nil
-    }
-    
-    /// Elimina el kit
-    private func deleteKit() async {
-        do {
-            try await KitService.shared.deleteKit(kitId: kit.id ?? "", actor: currentUser)
-            
-            // Volver atrás
-            dismiss()
-            
-        } catch {
-            alertErrorMessage = error.localizedDescription
-            showError = true
+    /// Color según el estado del kit
+    private var statusColor: Color {
+        switch kit.status {
+        case .active:
+            return .green
+        case .inactive:
+            return .gray
+        case .maintenance:
+            return .orange
+        case .expired:
+            return .red
         }
     }
 }
 
 // MARK: - Preview
 
-#if DEBUG
-struct InventoryViewPreview: PreviewProvider {
-    static var previews: some View {
-        InventoryView(currentUser: previewUser)
-            .previewDisplayName("Inventory View")
-    }
-    
-    static let previewUser = UserFS(
-        id: "user_preview",
-        uid: "uid_preview",
-        username: "preview",
-        fullName: "Preview User",
-        email: "preview@ambukit.com",
-        active: true,
-        roleId: "role_programmer",
-        baseId: "base_bilbao1"
+#Preview("Con datos") {
+    let user = UserFS(
+        id: "1", uid: "uid1", username: "admin",
+        fullName: "Admin", email: "admin@test.com",
+        active: true, roleId: "role_programmer", baseId: nil
     )
+    
+    return InventoryView(currentUser: user)
 }
-#endif 

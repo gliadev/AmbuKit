@@ -1,0 +1,20 @@
+{
+  "name": "ambukit-security-tests",
+  "version": "1.0.0",
+  "description": "Firestore Security Rules Tests for AmbuKit",
+  "author": "Adolfo",
+  "license": "MIT",
+  "scripts": {
+    "test": "jest --testEnvironment=node --detectOpenHandles --forceExit",
+    "test:verbose": "jest --testEnvironment=node --detectOpenHandles --forceExit --verbose",
+    "test:watch": "jest --testEnvironment=node --watch"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase-admin": "^12.0.0",
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

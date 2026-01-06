@@ -1,0 +1,184 @@
+rules_version = '2';
+
+// ============================================================================
+// AmbuKit - Firestore Security Rules
+// ============================================================================
+// Sistema de gestión de kits médicos en ambulancias
+// Fecha: Diciembre 2025
+// 
+// ROLES:
+//   - programmer: Acceso completo a todo el sistema
+//   - logistics: CRUD en bases, vehículos, kits. NO puede eliminar vehículos/kits
+//   - sanitary: Solo lectura + actualizar stock de kitItems
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================================================
+    // HELPER FUNCTIONS
+    // ========================================================================
+    
+    /// Verifica si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    /// Obtiene el roleId del usuario autenticado
+    function getUserRoleId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleId;
+    }
+    
+    /// Obtiene el kind (tipo) del rol del usuario
+    function getUserRoleKind() {
+      let roleId = getUserRoleId();
+      return get(/databases/$(database)/documents/roles/$(roleId)).data.kind;
+    }
+    
+    /// Verifica si el usuario tiene un rol específico
+    function hasRole(roleKind) {
+      return isAuthenticated() && getUserRoleKind() == roleKind;
+    }
+    
+    /// Verifica si el usuario es Programador
+    function isProgrammer() {
+      return hasRole('programmer');
+    }
+    
+    /// Verifica si el usuario es Logística
+    function isLogistics() {
+      return hasRole('logistics');
+    }
+    
+    /// Verifica si el usuario es Sanitario
+    function isSanitary() {
+      return hasRole('sanitary');
+    }
+    
+    /// Verifica si el usuario es Programador o Logística
+    function isLogisticsOrProgrammer() {
+      return isProgrammer() || isLogistics();
+    }
+    
+    // ========================================================================
+    // USERS COLLECTION
+    // ========================================================================
+    // Create: Solo Programador
+    // Read: Todos los autenticados
+    // Update: Solo Programador
+    // Delete: Solo Programador
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isProgrammer();
+      allow update: if isProgrammer();
+      allow delete: if isProgrammer();
+    }
+    
+    // ========================================================================
+    // ROLES COLLECTION (Read-Only)
+    // ========================================================================
+    // Los roles son de solo lectura - se configuran manualmente
+    
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Nadie puede escribir desde cliente
+    }
+    
+    // ========================================================================
+    // POLICIES COLLECTION (Read-Only)
+    // ========================================================================
+    // Las políticas son de solo lectura - se configuran manualmente
+    
+    match /policies/{policyId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Nadie puede escribir desde cliente
+    }
+    
+    // ========================================================================
+    // BASES COLLECTION
+    // ========================================================================
+    // Create: Programador, Logística
+    // Read: Todos los autenticados
+    // Update: Programador, Logística
+    // Delete: Solo Programador
+    
+    match /bases/{baseId} {
+      allow read: if isAuthenticated();
+      allow create: if isLogisticsOrProgrammer();
+      allow update: if isLogisticsOrProgrammer();
+      allow delete: if isProgrammer();
+    }
+    
+    // ========================================================================
+    // VEHICLES COLLECTION
+    // ========================================================================
+    // Create: Programador, Logística
+    // Read: Todos los autenticados
+    // Update: Programador, Logística
+    // Delete: Solo Programador
+    
+    match /vehicles/{vehicleId} {
+      allow read: if isAuthenticated();
+      allow create: if isLogisticsOrProgrammer();
+      allow update: if isLogisticsOrProgrammer();
+      allow delete: if isProgrammer();
+    }
+    
+    // ========================================================================
+    // KITS COLLECTION
+    // ========================================================================
+    // Create: Programador, Logística
+    // Read: Todos los autenticados
+    // Update: Programador, Logística
+    // Delete: Solo Programador
+    
+    match /kits/{kitId} {
+      allow read: if isAuthenticated();
+      allow create: if isLogisticsOrProgrammer();
+      allow update: if isLogisticsOrProgrammer();
+      allow delete: if isProgrammer();
+    }
+    
+    // ========================================================================
+    // KIT ITEMS COLLECTION
+    // ========================================================================
+    // Create: Programador, Logística
+    // Read: Todos los autenticados
+    // Update: Todos los autenticados (sanitarios pueden actualizar stock)
+    // Delete: Programador, Logística
+    
+    match /kitItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isLogisticsOrProgrammer();
+      allow update: if isAuthenticated(); // Sanitarios pueden actualizar stock
+      allow delete: if isLogisticsOrProgrammer();
+    }
+    
+    // ========================================================================
+    // CATALOG ITEMS COLLECTION
+    // ========================================================================
+    // Create: Programador, Logística
+    // Read: Todos los autenticados
+    // Update: Programador, Logística
+    // Delete: Solo Programador
+    
+    match /catalogItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isLogisticsOrProgrammer();
+      allow update: if isLogisticsOrProgrammer();
+      allow delete: if isProgrammer();
+    }
+    
+    // ========================================================================
+    // AUDIT LOGS COLLECTION (Read-Only desde cliente)
+    // ========================================================================
+    // Los audit logs solo se escriben desde el servidor/servicios
+    // Los clientes solo pueden leer para trazabilidad
+    
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Solo el servidor puede escribir
+    }
+  }
+}

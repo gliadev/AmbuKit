@@ -27,3 +27,15 @@ fastlane/test_output
 
 # Firebase
 GoogleService-Info.plist
+
+# Claude AI
+claude.md
+CLAUDE.md
+# Node.js (SecurityTests)
+node_modules/
+
+# Firebase Emulator
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

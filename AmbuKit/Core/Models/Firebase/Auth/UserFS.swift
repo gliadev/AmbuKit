@@ -23,25 +23,25 @@ public struct UserFS: Codable, Identifiable, Sendable {
     public let uid: String
     
     /// Nombre de usuario (único)
-    public let username: String
+    public var username: String
     
     /// Nombre completo del usuario
-    public let fullName: String
+    public var fullName: String
     
     /// Email del usuario
-    public let email: String
+    public var email: String
     
     /// Indica si el usuario está activo
     public var active: Bool
     
     /// ID del rol asignado (referencia a RoleFS)
-    public let roleId: String?
+    public var roleId: String?
     
     /// ID de la base asignada (referencia a BaseFS)
-    public let baseId: String?
+    public var baseId: String?
     
     /// Fecha de creación
-    public let createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
     public var updatedAt: Date

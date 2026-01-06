@@ -78,12 +78,13 @@ extension Toast {
         Toast(type: .success, message: message, duration: duration)
     }
     
-    /// Toast de error
+    /// Toast de error con mensaje
     static func error(_ message: String, duration: TimeInterval = 4.0) -> Toast {
         Toast(type: .error, message: message, duration: duration)
     }
     
     /// Toast de error desde Error
+    /// ✅ CORREGIDO: Usa ErrorHelper.friendlyMessage(for:)
     static func error(_ error: Error, duration: TimeInterval = 4.0) -> Toast {
         Toast(type: .error, message: ErrorHelper.friendlyMessage(for: error), duration: duration)
     }

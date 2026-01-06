@@ -501,6 +501,54 @@ final class CatalogService: ObservableObject {
         }
     }
     
+    /// Elimina una categoría
+    /// - Parameters:
+    ///   - categoryId: ID de la categoría a eliminar
+    ///   - actor: Usuario que realiza la acción
+    /// - Throws: CatalogServiceError si hay problemas
+    ///
+    /// **Permisos requeridos:**
+    /// - Programador: ✅ Permitido
+    /// - Logística: ❌ NO permitido (solo puede crear y actualizar)
+    /// - Sanitario: ❌ NO permitido
+    func deleteCategory(categoryId: String, actor: UserFS?) async throws {
+        // 1. Validar permisos
+        guard await AuthorizationServiceFS.allowed(.delete, on: .category, for: actor) else {
+            throw CatalogServiceError.unauthorized("No tienes permisos para eliminar categorías")
+        }
+        
+        // 2. Verificar que existe
+        do {
+            let document = try await db.collection(CategoryFS.collectionName)
+                .document(categoryId)
+                .getDocument()
+            guard document.exists else {
+                throw CatalogServiceError.categoryNotFound("Categoría con ID '\(categoryId)' no encontrada")
+            }
+        } catch {
+            throw CatalogServiceError.firestoreError(error)
+        }
+        
+        // 3. Eliminar de Firestore
+        do {
+            try await db.collection(CategoryFS.collectionName)
+                .document(categoryId)
+                .delete()
+            
+            // 4. Eliminar del cache
+            categoryCache.removeValue(forKey: categoryId)
+            
+            // 5. Auditoría (futuro)
+            // await AuditServiceFS.log(.delete, entity: .category, entityId: categoryId, actor: actor)
+            
+            print("✅ Categoría '\(categoryId)' eliminada correctamente")
+            
+        } catch {
+            print("❌ Error eliminando categoría: \(error.localizedDescription)")
+            throw CatalogServiceError.firestoreError(error)
+        }
+    }
+    
     // MARK: - UnitOfMeasure CRUD
     
     /// Crea una nueva unidad de medida
@@ -620,6 +668,54 @@ final class CatalogService: ObservableObject {
         } catch {
             print("❌ Error obteniendo todas las UOMs: \(error.localizedDescription)")
             return []
+        }
+    }
+    
+    /// Elimina una unidad de medida (UOM)
+    /// - Parameters:
+    ///   - uomId: ID de la unidad a eliminar
+    ///   - actor: Usuario que realiza la acción
+    /// - Throws: CatalogServiceError si hay problemas
+    ///
+    /// **Permisos requeridos:**
+    /// - Programador: ✅ Permitido
+    /// - Logística: ❌ NO permitido (solo puede crear y actualizar)
+    /// - Sanitario: ❌ NO permitido
+    func deleteUOM(uomId: String, actor: UserFS?) async throws {
+        // 1. Validar permisos
+        guard await AuthorizationServiceFS.allowed(.delete, on: .unit, for: actor) else {
+            throw CatalogServiceError.unauthorized("No tienes permisos para eliminar unidades de medida")
+        }
+        
+        // 2. Verificar que existe
+        do {
+            let document = try await db.collection(UnitOfMeasureFS.collectionName)
+                .document(uomId)
+                .getDocument()
+            guard document.exists else {
+                throw CatalogServiceError.uomNotFound("Unidad de medida con ID '\(uomId)' no encontrada")
+            }
+        } catch {
+            throw CatalogServiceError.firestoreError(error)
+        }
+        
+        // 3. Eliminar de Firestore
+        do {
+            try await db.collection(UnitOfMeasureFS.collectionName)
+                .document(uomId)
+                .delete()
+            
+            // 4. Eliminar del cache
+            uomCache.removeValue(forKey: uomId)
+            
+            // 5. Auditoría (futuro)
+            // await AuditServiceFS.log(.delete, entity: .unit, entityId: uomId, actor: actor)
+            
+            print("✅ UOM '\(uomId)' eliminada correctamente")
+            
+        } catch {
+            print("❌ Error eliminando UOM: \(error.localizedDescription)")
+            throw CatalogServiceError.firestoreError(error)
         }
     }
     

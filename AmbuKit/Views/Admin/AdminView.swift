@@ -27,6 +27,7 @@ struct AdminView: View {
     
     @State private var canCreateKits = false
     @State private var canCreateVehicles = false
+    @State private var canCreateBases = false
     @State private var canEditThresholds = false
     @State private var canManageUsers = false
     @State private var isLoading = true
@@ -76,6 +77,11 @@ struct AdminView: View {
             // Sección: Crear Vehículo
             if canCreateVehicles {
                 createVehicleSection
+            }
+            
+            // Sección: Crear Base
+            if canCreateBases {
+                createBaseSection
             }
             
             // Sección: Editar Umbrales
@@ -131,7 +137,7 @@ struct AdminView: View {
                 
                 // Permisos badge
                 VStack(alignment: .trailing, spacing: 2) {
-                    let count = [canCreateKits, canCreateVehicles, canEditThresholds, canManageUsers].filter { $0 }.count
+                    let count = [canCreateKits, canCreateVehicles, canCreateBases, canEditThresholds, canManageUsers].filter { $0 }.count
                     Text("\(count)")
                         .font(.title2.bold())
                         .foregroundStyle(roleColor)
@@ -215,6 +221,43 @@ struct AdminView: View {
             }
         } header: {
             Label("Vehículos", systemImage: "car.2.fill")
+        }
+    }
+    
+    // MARK: - Create Base Section
+    
+    private var createBaseSection: some View {
+        Section {
+            NavigationLink {
+                CreateBaseScreen(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.teal.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "building.2.fill")
+                            .font(.title3)
+                            .foregroundStyle(.teal)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Crear Base")
+                            .font(.headline)
+                        Text("Añadir nueva estación/sede")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.teal)
+                }
+            }
+        } header: {
+            Label("Bases", systemImage: "building.fill")
         }
     }
     
@@ -313,11 +356,13 @@ struct AdminView: View {
         
         async let kits = AuthorizationServiceFS.canCreateKits(currentUser)
         async let vehicles = AuthorizationServiceFS.canCreateVehicles(currentUser)
+        async let bases = AuthorizationServiceFS.allowed(.create, on: .base, for: currentUser)
         async let thresholds = AuthorizationServiceFS.canEditThresholds(currentUser)
         async let users = AuthorizationServiceFS.canManageUsers(currentUser)
         
         canCreateKits = await kits
         canCreateVehicles = await vehicles
+        canCreateBases = await bases
         canEditThresholds = await thresholds
         canManageUsers = await users
         
@@ -522,6 +567,90 @@ struct CreateVehicleScreen: View {
                 plate: plate.isEmpty ? nil : plate,
                 type: selectedType.rawValue,
                 baseId: selectedBaseId,
+                actor: currentUser
+            )
+            showSuccess = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        
+        isProcessing = false
+    }
+}
+
+// MARK: - Create Base Screen
+
+struct CreateBaseScreen: View {
+    let currentUser: UserFS
+    
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var code = ""
+    @State private var name = ""
+    @State private var address = ""
+    @State private var isActive = true
+    @State private var isProcessing = false
+    @State private var errorMessage: String?
+    @State private var showSuccess = false
+    
+    var body: some View {
+        Form {
+            Section {
+                TextField("Código (ej: 2401)", text: $code)
+                    .textInputAutocapitalization(.characters)
+                
+                TextField("Nombre (ej: Bilbao Centro)", text: $name)
+                
+                TextField("Dirección (opcional)", text: $address)
+                
+                Toggle("Base activa", isOn: $isActive)
+            } header: {
+                Text("Datos de la Base")
+            }
+            
+            Section {
+                Button {
+                    Task { await createBase() }
+                } label: {
+                    HStack {
+                        Spacer()
+                        if isProcessing {
+                            ProgressView()
+                        } else {
+                            Label("Crear Base", systemImage: "plus.circle.fill")
+                        }
+                        Spacer()
+                    }
+                }
+                .disabled(code.isEmpty || name.isEmpty || isProcessing)
+            }
+            
+            if let error = errorMessage {
+                Section {
+                    Text(error)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle("Nueva Base")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Base Creada", isPresented: $showSuccess) {
+            Button("OK") { dismiss() }
+        } message: {
+            Text("La base '\(name)' se ha creado correctamente.")
+        }
+    }
+    
+    private func createBase() async {
+        isProcessing = true
+        errorMessage = nil
+        
+        do {
+            _ = try await BaseService.shared.create(
+                code: code,
+                name: name,
+                address: address.isEmpty ? nil : address,
+                active: isActive,
                 actor: currentUser
             )
             showSuccess = true

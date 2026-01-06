@@ -22,10 +22,10 @@ public struct BaseFS: Codable, Identifiable, Sendable {
     public let code: String
     
     /// Nombre de la base
-    public let name: String
+    public var name: String
     
     /// Dirección física de la base
-    public let address: String
+    public var address: String
     
     /// Indica si la base está activa
     public var active: Bool
@@ -34,7 +34,7 @@ public struct BaseFS: Codable, Identifiable, Sendable {
     public var vehicleIds: [String]
     
     /// Fecha de creación
-    public let createdAt: Date
+    public var createdAt: Date
     
     /// Fecha de última actualización
     public var updatedAt: Date

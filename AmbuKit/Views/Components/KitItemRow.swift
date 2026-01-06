@@ -3,47 +3,41 @@
 //  AmbuKit
 //
 //  Created by Adolfo on 9/12/25.
+//  Updated: 27/12/25 - Añadidas animaciones SF Symbols (iOS 17+)
 //
-
-
 
 import SwiftUI
 
 // MARK: - KitItemRow
 
-/// Componente reutilizable para mostrar un item de kit
-/// Incluye nombre, umbrales, cantidad editable con Stepper y badges de estado
+/// Fila de item de kit con animaciones visuales para estados de alerta
+///
+/// ## Animaciones implementadas:
+/// - **Badges de estado**: Pulse en BAJO STOCK y CADUCADO
+/// - **Icono de actualización**: Rotate mientras guarda
+/// - **Cantidad**: Bounce al cambiar
 struct KitItemRow: View {
     
     // MARK: - Properties
     
-    /// Item del kit a mostrar
     let item: KitItemFS
-    
-    /// Item del catálogo (para obtener nombre)
     let catalogItem: CatalogItemFS?
-    
-    /// Indica si este item se está actualizando
     let isUpdating: Bool
-    
-    /// Indica si el usuario puede editar la cantidad
     let canEdit: Bool
-    
-    /// Callback cuando cambia la cantidad
     let onQuantityChange: (Double) async -> Void
     
     // MARK: - State
     
-    /// Cantidad local para el Stepper (evita problemas de binding async)
     @State private var localQuantity: Double
+    @State private var quantityTrigger = 0  // Para animación bounce
     
-    // MARK: - Initialization
+    // MARK: - Init
     
     init(
         item: KitItemFS,
         catalogItem: CatalogItemFS?,
         isUpdating: Bool,
-        canEdit: Bool = true,
+        canEdit: Bool,
         onQuantityChange: @escaping (Double) async -> Void
     ) {
         self.item = item
@@ -57,67 +51,35 @@ struct KitItemRow: View {
     // MARK: - Body
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Indicador de estado (color lateral)
-            statusIndicator
-            
-            // Contenido principal
-            VStack(alignment: .leading, spacing: 6) {
-                // Nombre del item
-                itemName
+        VStack(alignment: .leading, spacing: 8) {
+            // Fila principal: nombre + cantidad
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    itemName
+                    thresholdsText
+                }
                 
-                // Umbrales min/max
-                thresholdsText
+                Spacer()
                 
-                // Badges de estado
-                statusBadges
+                quantityControl
             }
             
-            Spacer()
-            
-            // Control de cantidad
-            quantityControl
+            // Badges de estado (animados)
+            statusBadges
         }
         .padding(.vertical, 4)
-        // Actualizar cantidad local cuando cambie el item
-        .onChange(of: item.quantity) { _, newValue in
-            localQuantity = newValue
-        }
     }
     
-    // MARK: - Subviews
+    // MARK: - Item Name
     
-    /// Indicador visual de estado (barra lateral de color)
-    private var statusIndicator: some View {
-        Rectangle()
-            .fill(statusColor)
-            .frame(width: 4)
-            .cornerRadius(2)
-    }
-    
-    /// Color según el estado del stock
-    private var statusColor: Color {
-        if item.isBelowMinimum {
-            return .red
-        } else if item.isAboveMaximum {
-            return .orange
-        } else if item.isExpiringSoon {
-            return .yellow
-        } else if item.isExpired {
-            return .purple
-        } else {
-            return .green
-        }
-    }
-    
-    /// Nombre del item del catálogo
     private var itemName: some View {
-        Text(catalogItem?.name ?? "Cargando...")
+        Text(catalogItem?.name ?? item.catalogItemId ?? "Cargando...")
             .font(.body)
             .foregroundStyle(item.isBelowMinimum ? .red : .primary)
     }
     
-    /// Texto de umbrales (mínimo y máximo)
+    // MARK: - Thresholds Text
+    
     private var thresholdsText: some View {
         HStack(spacing: 4) {
             Text("Mín: \(Int(item.min))")
@@ -131,144 +93,178 @@ struct KitItemRow: View {
         .foregroundStyle(.secondary)
     }
     
-    /// Badges de estado (bajo stock, sobre stock, caducidad)
+    // MARK: - Status Badges (Animados)
+    
     @ViewBuilder
     private var statusBadges: some View {
         HStack(spacing: 6) {
-            // Badge de bajo stock
+            // ✅ Badge de bajo stock - ANIMADO con pulse
             if item.isBelowMinimum {
-                StatusBadge(
-                    text: "BAJO STOCK",
-                    icon: "arrow.down.circle.fill",
-                    color: .red
-                )
+                StatusBadge.lowStock()
             }
             
-            // Badge de sobre stock
+            // ✅ Badge de sobre stock - ANIMADO con pulse suave
             if item.isAboveMaximum {
-                StatusBadge(
-                    text: "SOBRE STOCK",
-                    icon: "arrow.up.circle.fill",
-                    color: .orange
-                )
+                StatusBadge.overStock()
             }
             
-            // Badge de caducidad próxima
+            // ✅ Badge de caducidad próxima - ANIMADO
             if item.isExpiringSoon && !item.isExpired {
-                StatusBadge(
-                    text: "CADUCA PRONTO",
-                    icon: "clock.fill",
-                    color: .yellow
-                )
+                StatusBadge.expiringSoon()
             }
             
-            // Badge de caducado
+            // ✅ Badge de caducado - ANIMADO con pulse intenso
             if item.isExpired {
-                StatusBadge(
-                    text: "CADUCADO",
-                    icon: "exclamationmark.triangle.fill",
-                    color: .purple
-                )
+                StatusBadge.expired()
             }
         }
     }
     
-    /// Control de cantidad (Stepper o texto si no puede editar)
+    // MARK: - Quantity Control
+    
     @ViewBuilder
     private var quantityControl: some View {
         if isUpdating {
-            // Spinner mientras actualiza
-            ProgressView()
-                .scaleEffect(0.8)
-                .frame(width: 80)
-        } else if canEdit {
-            // Stepper editable
-            Stepper(
-                value: $localQuantity,
-                in: 0...999,
-                step: 1
-            ) {
-                Text("\(Int(localQuantity))")
-                    .font(.body.monospacedDigit().bold())
-                    .frame(minWidth: 30, alignment: .trailing)
+            // ✅ ANIMACIÓN: Icono rotando mientras actualiza
+            if #available(iOS 17.0, *) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+                    .symbolEffect(.rotate, isActive: true)
+                    .frame(width: 80)
+            } else {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .frame(width: 80)
             }
-            .labelsHidden()
-            .onChange(of: localQuantity) { oldValue, newValue in
-                // Solo actualizar si el valor realmente cambió
-                guard oldValue != newValue else { return }
-                
-                Task {
-                    await onQuantityChange(newValue)
+        } else if canEdit {
+            // Stepper editable con feedback visual
+            HStack(spacing: 8) {
+                // ✅ ANIMACIÓN: Número con bounce al cambiar
+                if #available(iOS 17.0, *) {
+                    Text("\(Int(localQuantity))")
+                        .font(.title3.monospacedDigit().bold())
+                        .foregroundStyle(quantityColor)
+                        .contentTransition(.numericText())  // 🎯 Transición numérica
+                        .frame(minWidth: 35, alignment: .trailing)
+                } else {
+                    Text("\(Int(localQuantity))")
+                        .font(.title3.monospacedDigit().bold())
+                        .foregroundStyle(quantityColor)
+                        .frame(minWidth: 35, alignment: .trailing)
                 }
+                
+                // Botones +/-
+                Stepper("", value: $localQuantity, in: 0...999, step: 1)
+                    .labelsHidden()
+                    .onChange(of: localQuantity) { oldValue, newValue in
+                        guard oldValue != newValue else { return }
+                        quantityTrigger += 1
+                        Task {
+                            await onQuantityChange(newValue)
+                        }
+                    }
             }
         } else {
             // Solo lectura
             Text("\(Int(item.quantity))")
-                .font(.body.monospacedDigit().bold())
+                .font(.title3.monospacedDigit().bold())
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 40, alignment: .trailing)
         }
     }
-}
-
-// MARK: - StatusBadge
-
-/// Badge pequeño para mostrar estados
-private struct StatusBadge: View {
-    let text: String
-    let icon: String
-    let color: Color
     
-    var body: some View {
-        HStack(spacing: 2) {
-            Image(systemName: icon)
-                .font(.caption2)
-            Text(text)
-                .font(.caption2.bold())
+    // MARK: - Helpers
+    
+    private var quantityColor: Color {
+        if item.isBelowMinimum {
+            return .red
+        } else if item.isAboveMaximum {
+            return .orange
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(color)
-        .cornerRadius(4)
+        return .primary
     }
 }
 
 // MARK: - Preview
 
-#if DEBUG
-struct KitItemRowPreview: PreviewProvider {
-    static var previews: some View {
-        List {
-            KitItemRow(
-                item: KitItemFS.sampleAdrenalineOK,
-                catalogItem: nil,
-                isUpdating: false,
-                canEdit: true,
-                onQuantityChange: { _ in }
-            )
-        }
-        .previewDisplayName("Item OK")
+#Preview("KitItemRow - Estados") {
+    List {
+        // Item OK
+        KitItemRow(
+            item: KitItemFS(
+                id: "1",
+                quantity: 15,
+                min: 10,
+                max: 50
+            ),
+            catalogItem: CatalogItemFS(
+                id: "cat1",
+                code: "ADR001",
+                name: "Adrenalina 1mg",
+                categoryId: "farm"
+            ),
+            isUpdating: false,
+            canEdit: true,
+            onQuantityChange: { _ in }
+        )
+        
+        // Item bajo stock
+        KitItemRow(
+            item: KitItemFS(
+                id: "2",
+                quantity: 3,
+                min: 10,
+                max: 50
+            ),
+            catalogItem: CatalogItemFS(
+                id: "cat2",
+                code: "ATR001",
+                name: "Atropina 0.5mg",
+                categoryId: "farm"
+            ),
+            isUpdating: false,
+            canEdit: true,
+            onQuantityChange: { _ in }
+        )
+        
+        // Item caducado
+        KitItemRow(
+            item: KitItemFS(
+                id: "3",
+                quantity: 20,
+                min: 10,
+                max: 50,
+                expiry: Date().addingTimeInterval(-86400)  // Ayer
+            ),
+            catalogItem: CatalogItemFS(
+                id: "cat3",
+                code: "MOR001",
+                name: "Morfina 10mg",
+                categoryId: "farm"
+            ),
+            isUpdating: false,
+            canEdit: true,
+            onQuantityChange: { _ in }
+        )
+        
+        // Item actualizando
+        KitItemRow(
+            item: KitItemFS(
+                id: "4",
+                quantity: 25,
+                min: 10,
+                max: 50
+            ),
+            catalogItem: CatalogItemFS(
+                id: "cat4",
+                code: "SUE001",
+                name: "Suero Fisiológico 500ml",
+                categoryId: "fluidos"
+            ),
+            isUpdating: true,
+            canEdit: true,
+            onQuantityChange: { _ in }
+        )
     }
 }
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

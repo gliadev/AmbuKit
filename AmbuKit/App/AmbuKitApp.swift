@@ -10,6 +10,8 @@
 import SwiftUI
 import SwiftData
 import FirebaseCore
+import FirebaseFirestore
+import FirebaseAuth
 
 @main
 struct AmbuKitApp: App {
@@ -20,8 +22,6 @@ struct AmbuKitApp: App {
     
     // MARK: - SwiftData Container (Temporal - se elimina en TAREA 17)
     
-    /// ModelContainer para compatibilidad con vistas existentes
-    /// TODO: Eliminar cuando todas las vistas usen Firebase
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             User.self,
@@ -41,7 +41,7 @@ struct AmbuKitApp: App {
             schema: schema,
             isStoredInMemoryOnly: false
         )
-
+        
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
@@ -52,41 +52,50 @@ struct AmbuKitApp: App {
     // MARK: - Initialization
     
     init() {
-        // Configurar Firebase
-        FirebaseApp.configure()
+        // Configurar Firebase (solo una vez)
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         
-        print("✅ Firebase configurado correctamente")
-        print("🔥 Firestore habilitado")
-        print("🔐 Firebase Auth habilitado")
-        print("📱 AmbuKit iniciado")
+        if Self.isRunningTests {
+            print("🧪 Tests detectados - usando Firebase REAL")
+        } else {
+            print("✅ Firebase configurado correctamente")
+            print("🔥 Firestore habilitado")
+            print("🔐 Firebase Auth habilitado")
+            print("📱 AmbuKit iniciado")
+        }
         
         #if DEBUG
         print("⚠️ Modo DEBUG activado")
         #endif
     }
 
+    // MARK: - Test Detection
+
+    private static var isRunningTests: Bool {
+        NSClassFromString("XCTestCase") != nil
+    }
+    
+
+    private static func configureEmulators() {
+        let db = Firestore.firestore()
+        let settings = db.settings
+        settings.host = "localhost:8080"
+        settings.isSSLEnabled = false
+        settings.cacheSettings = MemoryCacheSettings()
+        db.settings = settings
+        
+        Auth.auth().useEmulator(withHost: "localhost", port: 9099)
+    }
+    
     // MARK: - Body
     
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(appState)
-                .modelContainer(sharedModelContainer) // Temporal para bridge
+                .modelContainer(sharedModelContainer)
         }
     }
 }
-
-// MARK: - App Delegate (Opcional - para notificaciones futuras)
-
-#if canImport(UIKit)
-import UIKit
-
-class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(
-        _ application: UIApplication,
-        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
-    ) -> Bool {
-        return true
-    }
-}
-#endif
