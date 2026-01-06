@@ -5,7 +5,7 @@
 //  Created by Adolfo on 26/12/25.
 //  TAREA 16: Vistas de gestión de Kits y Bases
 //  ACTUALIZADO: RealtimeManager integrado - Datos en tiempo real 🎯
-//
+//  ⚠️ NOTA: KitDetailEditView y BaseDetailEditView están en ManagementViewsEnhanced.swift
 
 import SwiftUI
 
@@ -250,107 +250,6 @@ struct CreateKitSheet: View {
     }
 }
 
-// MARK: - Kit Detail Edit View
-
-struct KitDetailEditView: View {
-    let kit: KitFS
-    let currentUser: UserFS?
-    
-    @Environment(\.dismiss) private var dismiss
-    
-    @State private var name: String
-    @State private var type: String
-    @State private var status: KitFS.Status
-    @State private var isSaving = false
-    @State private var toast: Toast?
-    @State private var alertConfig: AlertConfig?
-    
-    init(kit: KitFS, currentUser: UserFS?) {
-        self.kit = kit
-        self.currentUser = currentUser
-        _name = State(initialValue: kit.name)
-        _type = State(initialValue: kit.type)
-        _status = State(initialValue: kit.status)
-    }
-    
-    var hasChanges: Bool {
-        name != kit.name || type != kit.type || status != kit.status
-    }
-    
-    var body: some View {
-        Form {
-            Section("Información") {
-                LabeledContent("Código", value: kit.code)
-                TextField("Nombre", text: $name)
-                TextField("Tipo", text: $type)
-                Picker("Estado", selection: $status) {
-                    ForEach(KitFS.Status.allCases, id: \.self) { s in
-                        Text(s.displayName).tag(s)
-                    }
-                }
-            }
-            
-            Section("Estadísticas") {
-                LabeledContent("Items", value: "\(kit.itemCount)")
-                LabeledContent("Asignado", value: kit.isAssigned ? "Sí" : "No")
-                if kit.needsAudit {
-                    Label("Necesita auditoría", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
-                }
-            }
-            
-            Section {
-                Button("Eliminar Kit", role: .destructive) {
-                    alertConfig = .delete(kit.name) {
-                        Task { await deleteKit() }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Editar Kit")
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Guardar") {
-                    Task { await saveChanges() }
-                }
-                .disabled(!hasChanges || isSaving)
-            }
-        }
-        .loadingOverlay(isLoading: isSaving, message: "Guardando...")
-        .toast($toast)
-        .alert(config: $alertConfig)
-    }
-    
-    private func saveChanges() async {
-        isSaving = true
-        
-        var updatedKit = kit
-        updatedKit.name = name
-        updatedKit.type = type
-        updatedKit.status = status
-        
-        do {
-            try await KitService.shared.updateKit(kit: updatedKit, actor: currentUser)
-            toast = .success("Cambios guardados")
-        } catch {
-            toast = .error(ErrorHelper.friendlyMessage(for: error))
-        }
-        
-        isSaving = false
-    }
-    
-    private func deleteKit() async {
-        guard let kitId = kit.id else { return }
-        
-        do {
-            try await KitService.shared.deleteKit(kitId: kitId, actor: currentUser)
-            dismiss()
-        } catch {
-            toast = .error(ErrorHelper.friendlyMessage(for: error))
-        }
-    }
-}
-
 // MARK: - Base Management View
 
 struct BaseManagementView: View {
@@ -577,97 +476,8 @@ struct CreateBaseSheet: View {
     }
 }
 
-// MARK: - Base Detail Edit View
-
-struct BaseDetailEditView: View {
-    let base: BaseFS
-    let currentUser: UserFS?
-    
-    @Environment(\.dismiss) private var dismiss
-    
-    @State private var name: String
-    @State private var address: String
-    @State private var active: Bool
-    @State private var isSaving = false
-    @State private var toast: Toast?
-    @State private var alertConfig: AlertConfig?
-    
-    init(base: BaseFS, currentUser: UserFS?) {
-        self.base = base
-        self.currentUser = currentUser
-        _name = State(initialValue: base.name)
-        _address = State(initialValue: base.address)
-        _active = State(initialValue: base.active)
-    }
-    
-    var hasChanges: Bool {
-        name != base.name || address != base.address || active != base.active
-    }
-    
-    var body: some View {
-        Form {
-            Section("Información") {
-                LabeledContent("Código", value: base.code)
-                TextField("Nombre", text: $name)
-                TextField("Dirección", text: $address)
-                Toggle("Activa", isOn: $active)
-            }
-            
-            Section("Estadísticas") {
-                LabeledContent("Vehículos", value: base.vehicleCountText)
-            }
-            
-            Section {
-                Button("Eliminar Base", role: .destructive) {
-                    alertConfig = .delete(base.name) {
-                        Task { await deleteBase() }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Editar Base")
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Guardar") {
-                    Task { await saveChanges() }
-                }
-                .disabled(!hasChanges || isSaving)
-            }
-        }
-        .loadingOverlay(isLoading: isSaving, message: "Guardando...")
-        .toast($toast)
-        .alert(config: $alertConfig)
-    }
-    
-    private func saveChanges() async {
-        isSaving = true
-        
-        var updatedBase = base
-        updatedBase.name = name
-        updatedBase.address = address
-        updatedBase.active = active
-        
-        do {
-            try await BaseService.shared.update(updatedBase, actor: currentUser)
-            toast = .success("Cambios guardados")
-        } catch {
-            toast = .error(ErrorHelper.friendlyMessage(for: error))
-        }
-        
-        isSaving = false
-    }
-    
-    private func deleteBase() async {
-        guard let baseId = base.id else { return }
-        
-        do {
-            try await BaseService.shared.delete(baseId: baseId, actor: currentUser)
-            dismiss()
-        } catch {
-            toast = .error(ErrorHelper.friendlyMessage(for: error))
-        }
-    }
-}
+// ⚠️ BaseDetailEditView MOVIDA a ManagementViewsEnhanced.swift
+// (con funcionalidad mejorada: ver/desasignar vehículos)
 
 // MARK: - Vehicle Management View
 
@@ -987,11 +797,18 @@ struct VehicleDetailEditView: View {
         isSaving = true
         
         do {
-            try await VehicleService.shared.assignToBase(
-                vehicleId: vehicle.id ?? "",
-                baseId: selectedBaseId,
-                actor: currentUser
-            )
+            if let baseId = selectedBaseId {
+                try await VehicleService.shared.assignToBase(
+                    vehicleId: vehicle.id ?? "",
+                    baseId: baseId,
+                    actor: currentUser
+                )
+            } else {
+                try await VehicleService.shared.unassignFromBase(
+                    vehicleId: vehicle.id ?? "",
+                    actor: currentUser
+                )
+            }
             toast = .success("Cambios guardados")
         } catch {
             toast = .error(ErrorHelper.friendlyMessage(for: error))

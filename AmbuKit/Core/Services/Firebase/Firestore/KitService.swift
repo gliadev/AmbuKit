@@ -3,6 +3,7 @@
 //  AmbuKit
 //
 //  Created by Adolfo on 18/11/25.
+//  CORREGIDO: TAREA A+B - Uso correcto de async/await en creación
 //
 
 
@@ -10,43 +11,21 @@ import Foundation
 import FirebaseFirestore
 import Combine
 
-/// Servicio para gestionar Kits y sus ƒ en Firestore
-/// Maneja 2 entidades: Kit y KitItem
-/// Implementa CRUD completo con operaciones de stock y validaciones
 @MainActor
 final class KitService: ObservableObject {
     
-    // MARK: - Singleton
-    
     static let shared = KitService()
-    
-    // MARK: - Properties
-    
     private let db = Firestore.firestore()
     
-    // MARK: - Cache
-    
-    /// Cache de kits (kitId -> KitFS)
     private var kitCache: [String: KitFS] = [:]
-    
-    /// Cache de items de kit (kitItemId -> KitItemFS)
     private var kitItemCache: [String: KitItemFS] = [:]
-    
-    /// Tiempo de expiración del cache (5 minutos)
     private let cacheExpiration: TimeInterval = 300
-    
-    /// Última actualización del cache
     private var lastCacheUpdate: Date = .distantPast
     
-    // MARK: - Initialization
-    
-    private init() {
-        // Private para forzar uso del singleton
-    }
+    private init() {}
     
     // MARK: - Kit CRUD
     
-    /// Crea un nuevo kit
     func createKit(
         code: String,
         name: String,
@@ -58,708 +37,302 @@ final class KitService: ObservableObject {
         guard await AuthorizationServiceFS.allowed(.create, on: .kit, for: actor) else {
             throw KitServiceError.unauthorized("No tienes permisos para crear kits")
         }
-        
-        guard !code.isEmpty else {
-            throw KitServiceError.invalidData("El código no puede estar vacío")
-        }
-        
-        guard !name.isEmpty else {
-            throw KitServiceError.invalidData("El nombre no puede estar vacío")
-        }
+        guard !code.isEmpty else { throw KitServiceError.invalidData("El código no puede estar vacío") }
+        guard !name.isEmpty else { throw KitServiceError.invalidData("El nombre no puede estar vacío") }
         
         if let _ = await getKitByCode(code) {
             throw KitServiceError.duplicateCode("Ya existe un kit con código '\(code)'")
         }
         
-        if let vId = vehicleId {
-            let vehicle = await VehicleService.shared.getVehicle(id: vId)
-            guard vehicle != nil else {
-                throw KitServiceError.vehicleNotFound("Vehículo '\(vId)' no encontrado")
-            }
+        if let vId = vehicleId, await VehicleService.shared.getVehicle(id: vId) == nil {
+            throw KitServiceError.vehicleNotFound("Vehículo '\(vId)' no encontrado")
         }
         
-        var kit = KitFS(
-            code: code,
-            name: name,
-            type: type.rawValue,
-            status: KitFS.Status( rawValue: status ) ?? .active,
-            vehicleId: vehicleId
-        )
+        var kit = KitFS(code: code, name: name, type: type.rawValue, status: KitFS.Status(rawValue: status) ?? .active, vehicleId: vehicleId)
         
-        do {
-            let docRef = try db.collection(KitFS.collectionName).addDocument(from: kit)
-            kit.id = docRef.documentID
-            
-            if let id = kit.id {
-                kitCache[id] = kit
-                updateCacheTimestamp()
-            }
-            
-            print("✅ Kit '\(name)' (\(code)) creado correctamente")
-            return kit
-            
-        } catch {
-            print("❌ Error creando kit: \(error.localizedDescription)")
-            throw KitServiceError.firestoreError(error)
-        }
+        let docRef = db.collection(KitFS.collectionName).document()
+        kit.id = docRef.documentID
+        
+        let encodedData = try Firestore.Encoder().encode(kit)
+        try await docRef.setData(encodedData)
+        
+        kitCache[docRef.documentID] = kit
+        print("✅ Kit '\(name)' creado con ID: \(docRef.documentID)")
+        return kit
     }
     
-    /// Actualiza un kit
     func updateKit(kit: KitFS, actor: UserFS?) async throws {
         guard await AuthorizationServiceFS.allowed(.update, on: .kit, for: actor) else {
             throw KitServiceError.unauthorized("No tienes permisos para actualizar kits")
         }
-        
-        guard let kitId = kit.id else {
-            throw KitServiceError.invalidData("El kit no tiene ID válido")
-        }
-        
-        guard !kit.code.isEmpty else {
-            throw KitServiceError.invalidData("El código no puede estar vacío")
-        }
-        
-        guard !kit.name.isEmpty else {
-            throw KitServiceError.invalidData("El nombre no puede estar vacío")
-        }
+        guard let kitId = kit.id else { throw KitServiceError.invalidData("El kit no tiene ID válido") }
+        guard !kit.code.isEmpty else { throw KitServiceError.invalidData("El código no puede estar vacío") }
+        guard !kit.name.isEmpty else { throw KitServiceError.invalidData("El nombre no puede estar vacío") }
         
         var updatedKit = kit
         updatedKit.updatedAt = Date()
         
-        do {
-            try db.collection(KitFS.collectionName)
-                .document(kitId)
-                .setData(from: updatedKit, merge: true)
-            
-            kitCache[kitId] = updatedKit
-            
-            print("✅ Kit '\(kit.name)' actualizado correctamente")
-            
-        } catch {
-            print("❌ Error actualizando kit: \(error.localizedDescription)")
-            throw KitServiceError.firestoreError(error)
-        }
+        let encodedData = try Firestore.Encoder().encode(updatedKit)
+        try await db.collection(KitFS.collectionName).document(kitId).setData(encodedData, merge: true)
+        kitCache[kitId] = updatedKit
+        print("✅ Kit '\(kit.name)' actualizado")
     }
     
-    /// Elimina un kit
     func deleteKit(kitId: String, actor: UserFS?) async throws {
         guard await AuthorizationServiceFS.allowed(.delete, on: .kit, for: actor) else {
             throw KitServiceError.unauthorized("No tienes permisos para eliminar kits")
         }
-        
         guard let kit = await getKit(id: kitId) else {
-            throw KitServiceError.kitNotFound("Kit con ID '\(kitId)' no encontrado")
+            throw KitServiceError.kitNotFound("Kit '\(kitId)' no encontrado")
         }
-        
         let items = await getKitItems(kitId: kitId)
         guard items.isEmpty else {
-            throw KitServiceError.kitHasItems("No se puede eliminar el kit '\(kit.name)' porque tiene \(items.count) items")
+            throw KitServiceError.kitHasItems("No se puede eliminar: tiene \(items.count) items")
         }
         
-        do {
-            try await db.collection(KitFS.collectionName)
-                .document(kitId)
-                .delete()
-            
-            kitCache.removeValue(forKey: kitId)
-            
-            print("✅ Kit '\(kit.name)' eliminado correctamente")
-            
-        } catch {
-            print("❌ Error eliminando kit: \(error.localizedDescription)")
-            throw KitServiceError.firestoreError(error)
-        }
+        try await db.collection(KitFS.collectionName).document(kitId).delete()
+        kitCache.removeValue(forKey: kitId)
+        print("✅ Kit '\(kit.name)' eliminado")
     }
     
     // MARK: - Kit Queries
     
     func getKit(id: String) async -> KitFS? {
-        if isCacheValid(), let cached = kitCache[id] {
-            return cached
-        }
-        
+        if isCacheValid(), let cached = kitCache[id] { return cached }
         do {
-            let document = try await db.collection(KitFS.collectionName)
-                .document(id)
-                .getDocument()
-            
-            guard let kit = KitFS.from(snapshot: document) else {
-                return nil
-            }
-            
+            let doc = try await db.collection(KitFS.collectionName).document(id).getDocument()
+            guard let kit = try? doc.data(as: KitFS.self) else { return nil }
             kitCache[id] = kit
             return kit
-            
-        } catch {
-            print("❌ Error obteniendo kit '\(id)': \(error.localizedDescription)")
-            return nil
-        }
+        } catch { return nil }
     }
     
     func getKitByCode(_ code: String) async -> KitFS? {
         do {
-            let snapshot = try await db.collection(KitFS.collectionName)
-                .whereField("code", isEqualTo: code)
-                .limit(to: 1)
-                .getDocuments()
-            
-            guard let document = snapshot.documents.first,
-                  let kit = KitFS.from(snapshot: document) else {
-                return nil
-            }
-            
-            if let id = kit.id {
-                kitCache[id] = kit
-            }
-            
+            let snapshot = try await db.collection(KitFS.collectionName).whereField("code", isEqualTo: code).limit(to: 1).getDocuments()
+            guard let doc = snapshot.documents.first, let kit = try? doc.data(as: KitFS.self) else { return nil }
+            if let id = kit.id { kitCache[id] = kit }
             return kit
-            
-        } catch {
-            print("❌ Error obteniendo kit por código '\(code)': \(error.localizedDescription)")
-            return nil
-        }
+        } catch { return nil }
     }
     
     func getAllKits() async -> [KitFS] {
         do {
-            let snapshot = try await db.collection(KitFS.collectionName)
-                .order(by: "code")
-                .getDocuments()
-            
-            let kits = snapshot.documents.compactMap { doc -> KitFS? in
-                KitFS.from(snapshot: doc)
-            }
-            
-            kits.forEach { kit in
-                if let id = kit.id {
-                    kitCache[id] = kit
-                }
-            }
-            
+            let snapshot = try await db.collection(KitFS.collectionName).order(by: "code").getDocuments()
+            let kits = snapshot.documents.compactMap { try? $0.data(as: KitFS.self) }
+            kits.forEach { if let id = $0.id { kitCache[id] = $0 } }
             updateCacheTimestamp()
             return kits
-            
-        } catch {
-            print("❌ Error obteniendo todos los kits: \(error.localizedDescription)")
-            return []
-        }
+        } catch { return [] }
     }
     
     func getKitsByVehicle(vehicleId: String) async -> [KitFS] {
         do {
-            let snapshot = try await db.collection(KitFS.collectionName)
-                .whereField("vehicleId", isEqualTo: vehicleId)
-                .order(by: "code")
-                .getDocuments()
-            
-            let kits = snapshot.documents.compactMap { doc -> KitFS? in
-                KitFS.from(snapshot: doc)
-            }
-            
-            kits.forEach { kit in
-                if let id = kit.id {
-                    kitCache[id] = kit
-                }
-            }
-            
-            return kits
-            
-        } catch {
-            print("❌ Error obteniendo kits del vehículo '\(vehicleId)': \(error.localizedDescription)")
-            return []
-        }
+            let snapshot = try await db.collection(KitFS.collectionName).whereField("vehicleId", isEqualTo: vehicleId).getDocuments()
+            return snapshot.documents.compactMap { try? $0.data(as: KitFS.self) }
+        } catch { return [] }
     }
     
     func getUnassignedKits() async -> [KitFS] {
         do {
-            let snapshot = try await db.collection(KitFS.collectionName)
-                .whereField("vehicleId", isEqualTo: NSNull())
-                .order(by: "code")
-                .getDocuments()
-            
-            return snapshot.documents.compactMap { doc -> KitFS? in
-                KitFS.from(snapshot: doc)
-            }
-            
-        } catch {
-            print("❌ Error obteniendo kits sin asignar: \(error.localizedDescription)")
-            return []
-        }
+            let snapshot = try await db.collection(KitFS.collectionName).whereField("vehicleId", isEqualTo: NSNull()).getDocuments()
+            return snapshot.documents.compactMap { try? $0.data(as: KitFS.self) }
+        } catch { return [] }
     }
     
     // MARK: - KitItem CRUD
     
     func addItemToKit(
-        catalogItemId: String,
-        kitId: String,
-        quantity: Double,
-        min: Double,
-        max: Double? = nil,
-        expiry: Date? = nil,
-        lot: String? = nil,
-        actor: UserFS?
+        catalogItemId: String, kitId: String, quantity: Double, min: Double,
+        max: Double? = nil, expiry: Date? = nil, lot: String? = nil, actor: UserFS?
     ) async throws -> KitItemFS {
         guard await AuthorizationServiceFS.allowed(.create, on: .kitItem, for: actor) else {
-            throw KitServiceError.unauthorized("No tienes permisos para añadir items a kits")
+            throw KitServiceError.unauthorized("No tienes permisos para añadir items")
         }
-        
-        guard let _ = await getKit(id: kitId) else {
-            throw KitServiceError.kitNotFound("Kit '\(kitId)' no encontrado")
+        guard await getKit(id: kitId) != nil else { throw KitServiceError.kitNotFound("Kit no encontrado") }
+        guard await CatalogService.shared.getItem(id: catalogItemId) != nil else {
+            throw KitServiceError.catalogItemNotFound("Item del catálogo no encontrado")
         }
+        guard quantity >= 0 else { throw KitServiceError.invalidData("Cantidad no puede ser negativa") }
+        guard min >= 0 else { throw KitServiceError.invalidData("Mínimo no puede ser negativo") }
+        if let m = max, m < min { throw KitServiceError.invalidData("Máximo no puede ser menor que mínimo") }
         
-        let catalogItem = await CatalogService.shared.getItem(id: catalogItemId)
-        guard catalogItem != nil else {
-            throw KitServiceError.catalogItemNotFound("Item del catálogo '\(catalogItemId)' no encontrado")
-        }
-        
-        guard quantity >= 0 else {
-            throw KitServiceError.invalidData("La cantidad no puede ser negativa")
-        }
-        
-        guard min >= 0 else {
-            throw KitServiceError.invalidData("El mínimo no puede ser negativo")
-        }
-        
-        if let maxValue = max, maxValue < min {
-            throw KitServiceError.invalidData("El máximo no puede ser menor que el mínimo")
-        }
-        
-        let existingItems = await getKitItems(kitId: kitId)
-        if existingItems.contains(where: { $0.catalogItemId == catalogItemId }) {
+        let existing = await getKitItems(kitId: kitId)
+        if existing.contains(where: { $0.catalogItemId == catalogItemId }) {
             throw KitServiceError.itemAlreadyInKit("El item ya existe en este kit")
         }
         
-        var kitItem = KitItemFS(
-            quantity: quantity,
-            min: min,
-            max: max,
-            expiry: expiry,
-            lot: lot,
-            catalogItemId: catalogItemId,
-            kitId: kitId
-        )
+        var kitItem = KitItemFS(quantity: quantity, min: min, max: max, expiry: expiry, lot: lot, catalogItemId: catalogItemId, kitId: kitId)
+        let docRef = db.collection(KitItemFS.collectionName).document()
+        kitItem.id = docRef.documentID
         
-        do {
-            let docRef = try db.collection(KitItemFS.collectionName).addDocument(from: kitItem)
-            kitItem.id = docRef.documentID
-            
-            if let id = kitItem.id {
-                kitItemCache[id] = kitItem
-            }
-            
-            print("✅ Item añadido al kit correctamente")
-            return kitItem
-            
-        } catch {
-            print("❌ Error añadiendo item al kit: \(error.localizedDescription)")
-            throw KitServiceError.firestoreError(error)
-        }
+        let encodedData = try Firestore.Encoder().encode(kitItem)
+        try await docRef.setData(encodedData)
+        
+        kitItemCache[docRef.documentID] = kitItem
+        print("✅ Item añadido al kit con ID: \(docRef.documentID)")
+        return kitItem
     }
     
     func updateKitItem(kitItem: KitItemFS, actor: UserFS?) async throws {
         guard await AuthorizationServiceFS.allowed(.update, on: .kitItem, for: actor) else {
-            throw KitServiceError.unauthorized("No tienes permisos para actualizar items de kits")
+            throw KitServiceError.unauthorized("No tienes permisos para actualizar items")
         }
+        guard let itemId = kitItem.id else { throw KitServiceError.invalidData("Item sin ID") }
+        guard kitItem.quantity >= 0 else { throw KitServiceError.invalidData("Cantidad no puede ser negativa") }
         
-        guard let itemId = kitItem.id else {
-            throw KitServiceError.invalidData("El item no tiene ID válido")
-        }
+        var updated = kitItem
+        updated.updatedAt = Date()
         
-        guard kitItem.quantity >= 0 else {
-            throw KitServiceError.invalidData("La cantidad no puede ser negativa")
-        }
-        
-        guard kitItem.min >= 0 else {
-            throw KitServiceError.invalidData("El mínimo no puede ser negativo")
-        }
-        
-        var updatedItem = kitItem
-        updatedItem.updatedAt = Date()
-        
-        do {
-            try db.collection(KitItemFS.collectionName)
-                .document(itemId)
-                .setData(from: updatedItem, merge: true)
-            
-            kitItemCache[itemId] = updatedItem
-            
-            print("✅ Item del kit actualizado correctamente")
-            
-        } catch {
-            print("❌ Error actualizando item del kit: \(error.localizedDescription)")
-            throw KitServiceError.firestoreError(error)
-        }
+        let encodedData = try Firestore.Encoder().encode(updated)
+        try await db.collection(KitItemFS.collectionName).document(itemId).setData(encodedData, merge: true)
+        kitItemCache[itemId] = updated
+        print("✅ Item del kit actualizado")
     }
     
-    // MARK: - Update Thresholds Only (TAREA 13)
-    
-    /// Actualiza SOLO los umbrales (min/max) de un item de kit
-    ///
-    /// **Diferencia con updateKitItem():**
-    /// - `updateKitItem()` actualiza el KitItemFS completo
-    /// - `updateKitThresholds()` actualiza SOLO min y max (más eficiente)
-    ///
-    /// **Permisos requeridos:**
-    /// - Programador: ✅ Permitido
-    /// - Logística: ✅ Permitido
-    /// - Sanitario: ❌ NO permitido
-    ///
-    /// - Parameters:
-    ///   - itemId: ID del KitItem a actualizar
-    ///   - min: Nuevo valor mínimo
-    ///   - max: Nuevo valor máximo (opcional, nil para sin máximo)
-    ///   - actor: Usuario que realiza la acción
-    /// - Throws: KitServiceError si hay problemas de permisos o datos
-    func updateKitThresholds(
-        itemId: String,
-        min: Double,
-        max: Double?,
-        actor: UserFS?
-    ) async throws {
-        // 1. Validar permisos (usa canEditThresholds que permite Programmer y Logistics)
-        let canEdit = await AuthorizationServiceFS.canEditThresholds(actor)
-        guard canEdit else {
+    func updateKitThresholds(itemId: String, min: Double, max: Double?, actor: UserFS?) async throws {
+        guard await AuthorizationServiceFS.canEditThresholds(actor) else {
             throw KitServiceError.unauthorized("No tienes permisos para editar umbrales")
         }
+        guard min >= 0 else { throw KitServiceError.invalidData("Mínimo no puede ser negativo") }
+        if let m = max, m < min { throw KitServiceError.invalidData("Máximo no puede ser menor que mínimo") }
         
-        // 2. Validar itemId
-        guard !itemId.isEmpty else {
-            throw KitServiceError.invalidData("ID del item no válido")
+        var updates: [String: Any] = ["min": min, "updatedAt": Timestamp(date: Date())]
+        updates["max"] = max ?? NSNull()
+        
+        try await db.collection(KitItemFS.collectionName).document(itemId).updateData(updates)
+        if var cached = kitItemCache[itemId] {
+            cached.min = min; cached.max = max; cached.updatedAt = Date()
+            kitItemCache[itemId] = cached
         }
-        
-        // 3. Validar valores
-        guard min >= 0 else {
-            throw KitServiceError.invalidData("El mínimo no puede ser negativo")
-        }
-        
-        if let maxValue = max, maxValue < min {
-            throw KitServiceError.invalidData("El máximo no puede ser menor que el mínimo")
-        }
-        
-        // 4. Preparar actualizaciones (solo min, max y updatedAt)
-        var updates: [String: Any] = [
-            "min": min,
-            "updatedAt": Timestamp(date: Date())
-        ]
-        
-        // Para max: si es nil, guardamos NSNull() para eliminar el campo
-        // Si tiene valor, lo guardamos normalmente
-        if let maxValue = max {
-            updates["max"] = maxValue
-        } else {
-            updates["max"] = NSNull()
-        }
-        
-        // 5. Actualizar en Firestore
-        do {
-            try await db.collection(KitItemFS.collectionName)
-                .document(itemId)
-                .updateData(updates)
-            
-            // 6. Actualizar cache si existe
-            if var cachedItem = kitItemCache[itemId] {
-                cachedItem.min = min
-                cachedItem.max = max
-                cachedItem.updatedAt = Date()
-                kitItemCache[itemId] = cachedItem
-            }
-            
-            // 7. Log para debug
-            print("✅ Umbrales actualizados para item \(itemId): min=\(min), max=\(max ?? 0)")
-            
-        } catch {
-            print("❌ Error actualizando umbrales: \(error.localizedDescription)")
-            throw KitServiceError.firestoreError(error)
-        }
+        print("✅ Umbrales actualizados")
     }
     
     func removeItemFromKit(kitItemId: String, actor: UserFS?) async throws {
         guard await AuthorizationServiceFS.allowed(.delete, on: .kitItem, for: actor) else {
-            throw KitServiceError.unauthorized("No tienes permisos para eliminar items de kits")
+            throw KitServiceError.unauthorized("No tienes permisos para eliminar items")
         }
-        
-        guard let _ = await getKitItem(id: kitItemId) else {
-            throw KitServiceError.kitItemNotFound("Item '\(kitItemId)' no encontrado")
-        }
-        
-        do {
-            try await db.collection(KitItemFS.collectionName)
-                .document(kitItemId)
-                .delete()
-            
-            kitItemCache.removeValue(forKey: kitItemId)
-            
-            print("✅ Item eliminado del kit correctamente")
-            
-        } catch {
-            print("❌ Error eliminando item del kit: \(error.localizedDescription)")
-            throw KitServiceError.firestoreError(error)
-        }
+        try await db.collection(KitItemFS.collectionName).document(kitItemId).delete()
+        kitItemCache.removeValue(forKey: kitItemId)
+        print("✅ Item eliminado del kit")
     }
     
     // MARK: - KitItem Queries
     
     func getKitItem(id: String) async -> KitItemFS? {
-        if let cached = kitItemCache[id] {
-            return cached
-        }
-        
+        if let cached = kitItemCache[id] { return cached }
         do {
-            let document = try await db.collection(KitItemFS.collectionName)
-                .document(id)
-                .getDocument()
-            
-            guard let item = KitItemFS.from(snapshot: document) else {
-                return nil
-            }
-            
+            let doc = try await db.collection(KitItemFS.collectionName).document(id).getDocument()
+            guard let item = try? doc.data(as: KitItemFS.self) else { return nil }
             kitItemCache[id] = item
             return item
-            
-        } catch {
-            print("❌ Error obteniendo item de kit '\(id)': \(error.localizedDescription)")
-            return nil
-        }
+        } catch { return nil }
     }
     
     func getKitItems(kitId: String) async -> [KitItemFS] {
         do {
-            let snapshot = try await db.collection(KitItemFS.collectionName)
-                .whereField("kitId", isEqualTo: kitId)
-                .getDocuments()
-            
-            let items = snapshot.documents.compactMap { doc -> KitItemFS? in
-                KitItemFS.from(snapshot: doc)
-            }
-            
-            items.forEach { item in
-                if let id = item.id {
-                    kitItemCache[id] = item
-                }
-            }
-            
+            let snapshot = try await db.collection(KitItemFS.collectionName).whereField("kitId", isEqualTo: kitId).getDocuments()
+            let items = snapshot.documents.compactMap { try? $0.data(as: KitItemFS.self) }
+            items.forEach { if let id = $0.id { kitItemCache[id] = $0 } }
             return items
-            
-        } catch {
-            print("❌ Error obteniendo items del kit '\(kitId)': \(error.localizedDescription)")
-            return []
-        }
+        } catch { return [] }
     }
     
     // MARK: - Stock Operations
     
     func getLowStockItems() async -> [KitItemFS] {
         do {
-            let snapshot = try await db.collection(KitItemFS.collectionName)
-                .getDocuments()
-            
+            let snapshot = try await db.collection(KitItemFS.collectionName).getDocuments()
             return snapshot.documents.compactMap { doc -> KitItemFS? in
-                guard let item = KitItemFS.from(snapshot: doc) else { return nil }
+                guard let item = try? doc.data(as: KitItemFS.self) else { return nil }
                 return item.isBelowMinimum ? item : nil
             }
-            
-        } catch {
-            print("❌ Error obteniendo items con stock bajo: \(error.localizedDescription)")
-            return []
-        }
+        } catch { return [] }
     }
     
     func getExpiringItems() async -> [KitItemFS] {
         do {
-            let thirtyDaysFromNow = Date().addingTimeInterval(86400 * 30)
-            
+            let thirtyDays = Date().addingTimeInterval(86400 * 30)
             let snapshot = try await db.collection(KitItemFS.collectionName)
-                .whereField("expiry", isLessThanOrEqualTo: thirtyDaysFromNow)
-                .whereField("expiry", isGreaterThan: Date())
-                .getDocuments()
-            
-            return snapshot.documents.compactMap { doc -> KitItemFS? in
-                KitItemFS.from(snapshot: doc)
-            }
-            
-        } catch {
-            print("❌ Error obteniendo items próximos a caducar: \(error.localizedDescription)")
-            return []
-        }
+                .whereField("expiry", isLessThanOrEqualTo: thirtyDays)
+                .whereField("expiry", isGreaterThan: Date()).getDocuments()
+            return snapshot.documents.compactMap { try? $0.data(as: KitItemFS.self) }
+        } catch { return [] }
     }
     
     func getExpiredItems() async -> [KitItemFS] {
         do {
-            let snapshot = try await db.collection(KitItemFS.collectionName)
-                .whereField("expiry", isLessThan: Date())
-                .getDocuments()
-            
-            return snapshot.documents.compactMap { doc -> KitItemFS? in
-                KitItemFS.from(snapshot: doc)
-            }
-            
-        } catch {
-            print("❌ Error obteniendo items caducados: \(error.localizedDescription)")
-            return []
-        }
+            let snapshot = try await db.collection(KitItemFS.collectionName).whereField("expiry", isLessThan: Date()).getDocuments()
+            return snapshot.documents.compactMap { try? $0.data(as: KitItemFS.self) }
+        } catch { return [] }
     }
     
     func getLowStockItemsInKit(kitId: String) async -> [KitItemFS] {
-        let allItems = await getKitItems(kitId: kitId)
-        return allItems.filter { $0.isBelowMinimum }
+        return await getKitItems(kitId: kitId).filter { $0.isBelowMinimum }
     }
     
     // MARK: - Statistics
     
-    func getKitStatistics(kitId: String) async -> (
-        totalItems: Int,
-        lowStockItems: Int,
-        expiringItems: Int,
-        expiredItems: Int
-    ) {
+    func getKitStatistics(kitId: String) async -> (totalItems: Int, lowStockItems: Int, expiringItems: Int, expiredItems: Int) {
         let items = await getKitItems(kitId: kitId)
-        
-        let lowStock = items.filter { $0.isBelowMinimum }
-        let expiring = items.filter { $0.isExpiringSoon }
-        let expired = items.filter { $0.isExpired }
-        
-        return (
-            totalItems: items.count,
-            lowStockItems: lowStock.count,
-            expiringItems: expiring.count,
-            expiredItems: expired.count
-        )
+        return (items.count, items.filter { $0.isBelowMinimum }.count, items.filter { $0.isExpiringSoon }.count, items.filter { $0.isExpired }.count)
     }
     
-    func getGlobalStatistics() async -> (
-        totalKits: Int,
-        assignedKits: Int,
-        unassignedKits: Int,
-        totalItems: Int,
-        lowStockItems: Int,
-        expiringItems: Int,
-        expiredItems: Int
-    ) {
+    func getGlobalStatistics() async -> (totalKits: Int, assignedKits: Int, unassignedKits: Int, totalItems: Int, lowStockItems: Int, expiringItems: Int, expiredItems: Int) {
         let kits = await getAllKits()
-        let assigned = kits.filter { $0.isAssigned }
-        
-        let lowStock = await getLowStockItems()
-        let expiring = await getExpiringItems()
-        let expired = await getExpiredItems()
-        
+        let assigned = kits.filter { $0.isAssigned }.count
         var totalItems = 0
-        for kit in kits {
-            let items = await getKitItems(kitId: kit.id ?? "")
-            totalItems += items.count
-        }
-        
-        return (
-            totalKits: kits.count,
-            assignedKits: assigned.count,
-            unassignedKits: kits.count - assigned.count,
-            totalItems: totalItems,
-            lowStockItems: lowStock.count,
-            expiringItems: expiring.count,
-            expiredItems: expired.count
-        )
+        for kit in kits { totalItems += await getKitItems(kitId: kit.id ?? "").count }
+        return (kits.count, assigned, kits.count - assigned, totalItems, await getLowStockItems().count, await getExpiringItems().count, await getExpiredItems().count)
     }
     
-    func isKitComplete(kitId: String) async -> Bool {
-        let lowStockItems = await getLowStockItemsInKit(kitId: kitId)
-        return lowStockItems.isEmpty
-    }
+    func isKitComplete(kitId: String) async -> Bool { return await getLowStockItemsInKit(kitId: kitId).isEmpty }
     
     // MARK: - Cache
     
-    func clearCache() {
-        kitCache.removeAll()
-        kitItemCache.removeAll()
-        lastCacheUpdate = .distantPast
+    func clearCache() { kitCache.removeAll(); kitItemCache.removeAll(); lastCacheUpdate = .distantPast }
+    func clearKitCache() { kitCache.removeAll() }
+    func clearKitItemCache() { kitItemCache.removeAll() }
+    private func isCacheValid() -> Bool { Date().timeIntervalSince(lastCacheUpdate) < cacheExpiration }
+    private func updateCacheTimestamp() { lastCacheUpdate = Date() }
+    
+    // MARK: - Search
+    
+    func searchKits(by text: String) async -> [KitFS] {
+        let all = await getAllKits()
+        guard !text.isEmpty else { return all }
+        let l = text.lowercased()
+        return all.filter { $0.code.lowercased().contains(l) || $0.name.lowercased().contains(l) }
     }
     
-    func clearKitCache() {
-        kitCache.removeAll()
-    }
-    
-    func clearKitItemCache() {
-        kitItemCache.removeAll()
-    }
-    
-    private func isCacheValid() -> Bool {
-        let timeSinceLastUpdate = Date().timeIntervalSince(lastCacheUpdate)
-        return timeSinceLastUpdate < cacheExpiration
-    }
-    
-    private func updateCacheTimestamp() {
-        lastCacheUpdate = Date()
-    }
+    func getKitsNeedingAudit() async -> [KitFS] { return await getAllKits().filter { $0.needsAudit } }
 }
 
 // MARK: - Errors
 
 enum KitServiceError: LocalizedError {
-    case unauthorized(String)
-    case kitNotFound(String)
-    case kitItemNotFound(String)
-    case vehicleNotFound(String)
-    case catalogItemNotFound(String)
-    case duplicateCode(String)
-    case invalidData(String)
-    case kitHasItems(String)
-    case itemAlreadyInKit(String)
-    case firestoreError(Error)
+    case unauthorized(String), kitNotFound(String), kitItemNotFound(String), vehicleNotFound(String)
+    case catalogItemNotFound(String), duplicateCode(String), invalidData(String), kitHasItems(String)
+    case itemAlreadyInKit(String), firestoreError(Error)
     
     var errorDescription: String? {
         switch self {
-        case .unauthorized(let message):
-            return "❌ Sin autorización: \(message)"
-        case .kitNotFound(let message):
-            return "❌ Kit no encontrado: \(message)"
-        case .kitItemNotFound(let message):
-            return "❌ Item de kit no encontrado: \(message)"
-        case .vehicleNotFound(let message):
-            return "❌ Vehículo no encontrado: \(message)"
-        case .catalogItemNotFound(let message):
-            return "❌ Item del catálogo no encontrado: \(message)"
-        case .duplicateCode(let message):
-            return "❌ Código duplicado: \(message)"
-        case .invalidData(let message):
-            return "❌ Datos inválidos: \(message)"
-        case .kitHasItems(let message):
-            return "❌ Kit tiene items: \(message)"
-        case .itemAlreadyInKit(let message):
-            return "❌ Item ya existe: \(message)"
-        case .firestoreError(let error):
-            return "❌ Error de Firestore: \(error.localizedDescription)"
+        case .unauthorized(let m): return "❌ Sin autorización: \(m)"
+        case .kitNotFound(let m): return "❌ Kit no encontrado: \(m)"
+        case .kitItemNotFound(let m): return "❌ Item no encontrado: \(m)"
+        case .vehicleNotFound(let m): return "❌ Vehículo no encontrado: \(m)"
+        case .catalogItemNotFound(let m): return "❌ Item catálogo no encontrado: \(m)"
+        case .duplicateCode(let m): return "❌ Código duplicado: \(m)"
+        case .invalidData(let m): return "❌ Datos inválidos: \(m)"
+        case .kitHasItems(let m): return "❌ Kit tiene items: \(m)"
+        case .itemAlreadyInKit(let m): return "❌ Item ya existe: \(m)"
+        case .firestoreError(let e): return "❌ Firestore: \(e.localizedDescription)"
         }
     }
 }
-
-// MARK: - Search
-
-extension KitService {
-    func searchKits(by searchText: String) async -> [KitFS] {
-        let allKits = await getAllKits()
-        
-        guard !searchText.isEmpty else { return allKits }
-        
-        let lowercased = searchText.lowercased()
-        return allKits.filter {
-            $0.code.lowercased().contains(lowercased) ||
-            $0.name.lowercased().contains(lowercased)
-        }
-    }
-    
-    func getKitsNeedingAudit() async -> [KitFS] {
-        let allKits = await getAllKits()
-        return allKits.filter { $0.needsAudit }
-    }
-}
-
-// MARK: - Debug
 
 #if DEBUG
 extension KitService {
-    func printCacheStatus() {
-        print("📊 KitService Cache Status:")
-        print("   Kits en cache: \(kitCache.count)")
-        print("   Items en cache: \(kitItemCache.count)")
-        print("   Última actualización: \(lastCacheUpdate)")
-        print("   Cache válido: \(isCacheValid())")
-    }
+    func printCacheStatus() { print("📊 KitService: Kits=\(kitCache.count), Items=\(kitItemCache.count)") }
 }
 #endif

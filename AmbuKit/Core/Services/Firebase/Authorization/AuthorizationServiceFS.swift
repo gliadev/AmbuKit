@@ -5,6 +5,7 @@
 //  Created by Adolfo on 15/11/25.
 //
 //  TAREA 16.1: Actualizado para permitir que Logística cree kits y vehículos
+//  FIX: Verificación directa de roleId para evitar problemas con PolicyService
 //
 
 import Foundation
@@ -19,14 +20,45 @@ import Foundation
 @MainActor
 public enum AuthorizationServiceFS {
     
+    // MARK: - Role ID Constants
+    
+    /// IDs de roles conocidos en Firestore
+    private static let programmerRoleIds = ["role_programmer", "programmer"]
+    private static let logisticsRoleIds = ["role_logistics", "logistics"]
+    private static let sanitaryRoleIds = ["role_sanitary", "sanitary"]
+    
+    // MARK: - Quick Role Checks (Direct)
+    
+    /// Verifica si el usuario es Programador por su roleId directamente
+    /// Esta verificación es directa y no depende de PolicyService
+    private static func isProgrammerDirect(_ user: UserFS?) -> Bool {
+        guard let roleId = user?.roleId else { return false }
+        return programmerRoleIds.contains(roleId.lowercased()) ||
+               roleId.lowercased().contains("programmer")
+    }
+    
+    /// Verifica si el usuario es Logística por su roleId directamente
+    private static func isLogisticsDirect(_ user: UserFS?) -> Bool {
+        guard let roleId = user?.roleId else { return false }
+        return logisticsRoleIds.contains(roleId.lowercased()) ||
+               roleId.lowercased().contains("logistics")
+    }
+    
+    /// Verifica si el usuario es Sanitario por su roleId directamente
+    private static func isSanitaryDirect(_ user: UserFS?) -> Bool {
+        guard let roleId = user?.roleId else { return false }
+        return sanitaryRoleIds.contains(roleId.lowercased()) ||
+               roleId.lowercased().contains("sanitary")
+    }
+    
     // MARK: - Main Authorization Method
     
     /// Verifica si un usuario tiene permiso para realizar una acción sobre una entidad
     ///
-    /// **Flujo de verificación:**
+    /// **Flujo de verificación (OPTIMIZADO):**
     /// 1. Verificar que el usuario existe
-    /// 2. Obtener rol del usuario desde Firestore (con caché)
-    /// 3. Si es Programador → permitir TODO
+    /// 2. ✅ NUEVO: Verificación directa de roleId para Programador (siempre permitir)
+    /// 3. Obtener rol del usuario desde Firestore (con caché)
     /// 4. Buscar policy específica para la entidad
     /// 5. Verificar el permiso concreto (create/read/update/delete)
     ///
@@ -35,14 +67,6 @@ public enum AuthorizationServiceFS {
     ///   - entity: Entidad sobre la que se realiza la acción (kit, user, kitItem, etc.)
     ///   - user: Usuario que intenta realizar la acción
     /// - Returns: `true` si tiene permiso, `false` si no
-    ///
-    /// - Example:
-    /// ```swift
-    /// let canCreateKit = await AuthorizationServiceFS.allowed(.create, on: .kit, for: currentUser)
-    /// if canCreateKit {
-    ///     // Crear kit...
-    /// }
-    /// ```
     public static func allowed(
         _ action: ActionKind,
         on entity: EntityKind,
@@ -50,38 +74,66 @@ public enum AuthorizationServiceFS {
     ) async -> Bool {
         // 1. Verificar que el usuario existe
         guard let user = user else {
+            print("⚠️ AuthorizationServiceFS: Usuario nil")
             return false
         }
         
-        // 2. Obtener rol desde Firestore (con caché)
-        guard let role = await PolicyService.shared.getRole(id: user.roleId) else {
-            return false
-        }
-        
-        // 3. Programador tiene acceso total a TODO
-        if role.kind == .programmer {
+        // 2. ✅ NUEVO: Verificación directa para Programador - SIEMPRE permitir todo
+        if isProgrammerDirect(user) {
+            print("✅ AuthorizationServiceFS: Programador detectado (roleId: \(user.roleId)) - Acceso total")
             return true
         }
         
-        // 4. Buscar policy específica para esta entidad
-        guard let policy = await PolicyService.shared.getPolicy(
-            roleId: role.id,
-            entity: entity
-        ) else {
-            return false
+        // 3. Para otros roles, intentar obtener desde PolicyService
+        if let role = await PolicyService.shared.getRole(id: user.roleId) {
+            // Doble verificación por si acaso
+            if role.kind == .programmer {
+                print("✅ AuthorizationServiceFS: Programador por PolicyService")
+                return true
+            }
+            
+            // 4. Buscar policy específica para esta entidad
+            if let policy = await PolicyService.shared.getPolicy(roleId: role.id, entity: entity) {
+                switch action {
+                case .create: return policy.canCreate
+                case .read: return policy.canRead
+                case .update: return policy.canUpdate
+                case .delete: return policy.canDelete
+                }
+            }
         }
         
-        // 5. Verificar el permiso específico solicitado
-        switch action {
-        case .create:
-            return policy.canCreate
-        case .read:
-            return policy.canRead
-        case .update:
-            return policy.canUpdate
-        case .delete:
-            return policy.canDelete
+        // 5. ✅ NUEVO: Fallback basado en roleId directo para Logística y Sanitario
+        return fallbackPermission(action: action, entity: entity, user: user)
+    }
+    
+    // MARK: - Fallback Permissions
+    
+    /// Permisos de fallback basados en el roleId cuando PolicyService falla
+    private static func fallbackPermission(action: ActionKind, entity: EntityKind, user: UserFS) -> Bool {
+        // Logística: CRUD en kits, vehicles, bases, kitItems, catalogItems, categories, units | Solo lectura en users/audit
+        if isLogisticsDirect(user) {
+            switch entity {
+            case .kit, .vehicle, .base, .kitItem, .catalogItem, .category, .unit:
+                return true  // CRUD completo
+            case .user, .audit:
+                return action == .read  // Solo lectura
+            }
         }
+        
+        // Sanitario: Lectura + actualizar stock en kitItems
+        if isSanitaryDirect(user) {
+            switch entity {
+            case .kitItem:
+                return action == .read || action == .update  // Leer y actualizar stock
+            case .kit, .vehicle, .base, .catalogItem, .category, .unit, .user, .audit:
+                return action == .read  // Solo lectura en todo lo demás
+            }
+        }
+        
+        // Por defecto, solo lectura
+        print("⚠️ AuthorizationServiceFS: Rol desconocido '\(user.roleId)' - Solo lectura")
+        return action == .read
     }
     
     // MARK: - Convenience Methods
@@ -109,10 +161,6 @@ public enum AuthorizationServiceFS {
     // MARK: - Batch Permission Checks
     
     /// Obtiene todos los permisos de un usuario para una entidad específica
-    /// - Parameters:
-    ///   - entity: Entidad a verificar
-    ///   - user: Usuario
-    /// - Returns: Tupla con los 4 permisos (create, read, update, delete)
     public static func permissions(
         for entity: EntityKind,
         user: UserFS?
@@ -121,33 +169,28 @@ public enum AuthorizationServiceFS {
             return (false, false, false, false)
         }
         
-        // Obtener rol
-        guard let role = await PolicyService.shared.getRole(id: user.roleId) else {
-            return (false, false, false, false)
-        }
-        
-        // Programador tiene todo
-        if role.kind == .programmer {
+        // ✅ OPTIMIZADO: Programador tiene todo
+        if isProgrammerDirect(user) {
             return (true, true, true, true)
         }
         
-        // Obtener policy
-        guard let policy = await PolicyService.shared.getPolicy(roleId: role.id, entity: entity) else {
-            return (false, false, false, false)
-        }
+        // Obtener permisos individualmente (usa el fallback automáticamente)
+        async let c = allowed(.create, on: entity, for: user)
+        async let r = allowed(.read, on: entity, for: user)
+        async let u = allowed(.update, on: entity, for: user)
+        async let d = allowed(.delete, on: entity, for: user)
         
-        return (
-            policy.canCreate,
-            policy.canRead,
-            policy.canUpdate,
-            policy.canDelete
-        )
+        return await (c, r, u, d)
     }
     
-    // MARK: - Role-Specific Checks
+    // MARK: - Role-Specific Checks (Public)
     
     /// Verifica si el usuario es Programador
     public static func isProgrammer(_ user: UserFS?) async -> Bool {
+        // Verificación directa primero
+        if isProgrammerDirect(user) { return true }
+        
+        // Fallback a PolicyService
         guard let roleId = user?.roleId else { return false }
         guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
         return role.kind == .programmer
@@ -155,6 +198,7 @@ public enum AuthorizationServiceFS {
     
     /// Verifica si el usuario es Logística
     public static func isLogistics(_ user: UserFS?) async -> Bool {
+        if isLogisticsDirect(user) { return true }
         guard let roleId = user?.roleId else { return false }
         guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
         return role.kind == .logistics
@@ -162,6 +206,7 @@ public enum AuthorizationServiceFS {
     
     /// Verifica si el usuario es Sanitario
     public static func isSanitary(_ user: UserFS?) async -> Bool {
+        if isSanitaryDirect(user) { return true }
         guard let roleId = user?.roleId else { return false }
         guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
         return role.kind == .sanitary
@@ -172,29 +217,36 @@ public enum AuthorizationServiceFS {
     /// Verifica si el usuario puede editar umbrales (min/max)
     /// **Regla de negocio:** Solo Programador y Logística
     public static func canEditThresholds(_ user: UserFS?) async -> Bool {
+        // ✅ Verificación directa
+        if isProgrammerDirect(user) || isLogisticsDirect(user) {
+            return true
+        }
+        
+        // Fallback a PolicyService
         guard let roleId = user?.roleId else { return false }
         guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
-        
         return role.kind == .programmer || role.kind == .logistics
     }
     
     /// Verifica si el usuario puede crear kits
-    /// **Regla de negocio (ACTUALIZADA TAREA 16.1):** Programador y Logística
-    /// - ANTES: Solo Programador
-    /// - AHORA: Programador + Logística
+    /// **Regla de negocio:** Programador y Logística
     public static func canCreateKits(_ user: UserFS?) async -> Bool {
+        if isProgrammerDirect(user) || isLogisticsDirect(user) {
+            return true
+        }
         guard let roleId = user?.roleId else { return false }
         guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
-        
         return role.kind == .programmer || role.kind == .logistics
     }
     
     /// Verifica si el usuario puede crear vehículos
-    /// **Regla de negocio (NUEVA TAREA 16.1):** Programador y Logística
+    /// **Regla de negocio:** Programador y Logística
     public static func canCreateVehicles(_ user: UserFS?) async -> Bool {
+        if isProgrammerDirect(user) || isLogisticsDirect(user) {
+            return true
+        }
         guard let roleId = user?.roleId else { return false }
         guard let role = await PolicyService.shared.getRole(id: roleId) else { return false }
-        
         return role.kind == .programmer || role.kind == .logistics
     }
     
@@ -207,27 +259,26 @@ public enum AuthorizationServiceFS {
     /// Verifica si el usuario puede gestionar usuarios (crear/eliminar)
     /// **Regla de negocio:** Solo Programador
     public static func canManageUsers(_ user: UserFS?) async -> Bool {
-        let canCreate = await canCreate(.user, user: user)
-        let canDelete = await canDelete(.user, user: user)
-        return canCreate && canDelete
+        // ✅ Solo programador puede gestionar usuarios
+        if isProgrammerDirect(user) {
+            return true
+        }
+        return await isProgrammer(user)
     }
 }
 
 // MARK: - UIPermissions Compatibility
 
 /// Versión Firebase de UIPermissions para mantener compatibilidad con las vistas
-/// Estas son versiones async de los métodos originales
 @MainActor
 public enum UIPermissionsFS {
     
     /// Verifica si el usuario puede crear kits
-    /// **ACTUALIZADO TAREA 16.1:** Ahora Logística también puede
     public static func canCreateKits(_ user: UserFS?) async -> Bool {
         await AuthorizationServiceFS.canCreateKits(user)
     }
     
     /// Verifica si el usuario puede crear vehículos
-    /// **NUEVO TAREA 16.1**
     public static func canCreateVehicles(_ user: UserFS?) async -> Bool {
         await AuthorizationServiceFS.canCreateVehicles(user)
     }
@@ -285,20 +336,17 @@ extension AuthorizationServiceFS {
         }
         
         print("\n📋 Permisos de \(user.username) (@\(user.fullName)):")
+        print("   RoleId: \(user.roleId)")
+        print("   Es Programador (directo): \(isProgrammerDirect(user))")
+        print("   Es Logística (directo): \(isLogisticsDirect(user))")
+        print("   Es Sanitario (directo): \(isSanitaryDirect(user))")
         
-        guard let role = await PolicyService.shared.getRole(id: user.roleId) else {
-            print("   ❌ Rol no encontrado")
+        if isProgrammerDirect(user) {
+            print("   ✅ ACCESO TOTAL (Programador detectado por roleId)")
             return
         }
         
-        print("   Rol: \(role.displayName) (\(role.kind.rawValue))")
-        
-        if role.kind == .programmer {
-            print("   ✅ ACCESO TOTAL (Programador)")
-            return
-        }
-        
-        // Mostrar permisos especiales (TAREA 16.1)
+        // Mostrar permisos especiales
         print("\n   Permisos especiales:")
         let canCreateKits = await canCreateKits(user)
         let canCreateVehicles = await canCreateVehicles(user)

@@ -10,6 +10,8 @@
 //  - Crear Vehículo (Programador + Logística)
 //  - Editar Umbrales (Programador + Logística)
 //  - Gestión Usuarios (Solo Programador)
+//  - Editar Umbrales (Programador + Logística)
+//  - Gestión Usuarios (Solo Programador)
 //
 
 import SwiftUI
@@ -154,6 +156,7 @@ struct AdminView: View {
     
     private var createKitSection: some View {
         Section {
+            // Crear Kit
             NavigationLink {
                 CreateKitScreen(currentUser: currentUser)
             } label: {
@@ -182,6 +185,37 @@ struct AdminView: View {
                         .foregroundStyle(.blue)
                 }
             }
+            
+            // ✅ NUEVO: Editar Kits
+            NavigationLink {
+                KitManagementView(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.blue)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Editar Kits")
+                            .font(.headline)
+                        Text("Modificar o eliminar kits")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
         } header: {
             Label("Kits", systemImage: "shippingbox.fill")
         }
@@ -191,6 +225,7 @@ struct AdminView: View {
     
     private var createVehicleSection: some View {
         Section {
+            // Crear Vehículo
             NavigationLink {
                 CreateVehicleScreen(currentUser: currentUser)
             } label: {
@@ -219,6 +254,37 @@ struct AdminView: View {
                         .foregroundStyle(.green)
                 }
             }
+            
+            // ✅ NUEVO: Editar Vehículos
+            NavigationLink {
+                VehicleManagementView(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.green.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.green)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Editar Vehículos")
+                            .font(.headline)
+                        Text("Modificar o eliminar vehículos")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
         } header: {
             Label("Vehículos", systemImage: "car.2.fill")
         }
@@ -228,6 +294,7 @@ struct AdminView: View {
     
     private var createBaseSection: some View {
         Section {
+            // Crear Base
             NavigationLink {
                 CreateBaseScreen(currentUser: currentUser)
             } label: {
@@ -254,6 +321,37 @@ struct AdminView: View {
                     
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.teal)
+                }
+            }
+            
+            // ✅ NUEVO: Editar Bases
+            NavigationLink {
+                BaseManagementView(currentUser: currentUser)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.teal.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.teal)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Editar Bases")
+                            .font(.headline)
+                        Text("Modificar o eliminar bases")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
         } header: {
@@ -338,35 +436,34 @@ struct AdminView: View {
         }
     }
     
-    // MARK: - Helpers
-    
-    private var roleColor: Color {
-        guard let role = currentUser.role else { return .blue }
-        switch role.kind {
-        case .programmer: return .blue
-        case .logistics: return .orange
-        case .sanitary: return .green
-        }
-    }
-    
     // MARK: - Load Permissions
     
     private func loadPermissions() async {
-        isLoading = true
+        // Cargar todos los permisos en paralelo
+        async let kitsPermission = AuthorizationServiceFS.allowed(.create, on: .kit, for: currentUser)
+        async let vehiclesPermission = AuthorizationServiceFS.allowed(.create, on: .vehicle, for: currentUser)
+        async let basesPermission = AuthorizationServiceFS.allowed(.create, on: .base, for: currentUser)
+        async let thresholdsPermission = AuthorizationServiceFS.allowed(.update, on: .kitItem, for: currentUser)
+        async let usersPermission = AuthorizationServiceFS.allowed(.create, on: .user, for: currentUser)
         
-        async let kits = AuthorizationServiceFS.canCreateKits(currentUser)
-        async let vehicles = AuthorizationServiceFS.canCreateVehicles(currentUser)
-        async let bases = AuthorizationServiceFS.allowed(.create, on: .base, for: currentUser)
-        async let thresholds = AuthorizationServiceFS.canEditThresholds(currentUser)
-        async let users = AuthorizationServiceFS.canManageUsers(currentUser)
-        
-        canCreateKits = await kits
-        canCreateVehicles = await vehicles
-        canCreateBases = await bases
-        canEditThresholds = await thresholds
-        canManageUsers = await users
+        canCreateKits = await kitsPermission
+        canCreateVehicles = await vehiclesPermission
+        canCreateBases = await basesPermission
+        canEditThresholds = await thresholdsPermission
+        canManageUsers = await usersPermission
         
         isLoading = false
+    }
+    
+    // MARK: - Role Color
+    
+    private var roleColor: Color {
+        guard let role = currentUser.role else { return .gray }
+        switch role.kind {
+        case .programmer: return .purple
+        case .logistics: return .blue
+        case .sanitary: return .green
+        }
     }
 }
 
@@ -380,8 +477,6 @@ struct CreateKitScreen: View {
     @State private var code = ""
     @State private var name = ""
     @State private var selectedType: KitType = .SVB
-    @State private var vehicles: [VehicleFS] = []
-    @State private var selectedVehicleId: String?
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var showSuccess = false
@@ -389,23 +484,14 @@ struct CreateKitScreen: View {
     var body: some View {
         Form {
             Section {
-                TextField("Código (ej: KIT-SVA-001)", text: $code)
+                TextField("Código (ej: KIT-001)", text: $code)
                     .textInputAutocapitalization(.characters)
                 
-                TextField("Nombre del kit", text: $name)
+                TextField("Nombre (ej: Kit SVA Principal)", text: $name)
                 
-                Picker("Tipo de kit", selection: $selectedType) {
+                Picker("Tipo de Kit", selection: $selectedType) {
                     ForEach(KitType.allCases) { type in
-                        Label(type.rawValue, systemImage: iconFor(type))
-                            .tag(type)
-                    }
-                }
-                
-                Picker("Vehículo", selection: $selectedVehicleId) {
-                    Text("— Sin asignar —").tag(String?.none)
-                    ForEach(vehicles) { v in
-                        Text("\(v.code) - \(v.plate ?? "Sin matrícula")")
-                            .tag(Optional(v.id))
+                        Text(type.displayName).tag(type)
                     }
                 }
             } header: {
@@ -438,9 +524,6 @@ struct CreateKitScreen: View {
         }
         .navigationTitle("Nuevo Kit")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            vehicles = await VehicleService.shared.getAllVehicles()
-        }
         .alert("Kit Creado", isPresented: $showSuccess) {
             Button("OK") { dismiss() }
         } message: {
@@ -457,7 +540,6 @@ struct CreateKitScreen: View {
                 code: code,
                 name: name,
                 type: selectedType,
-                vehicleId: selectedVehicleId,
                 actor: currentUser
             )
             showSuccess = true
@@ -466,16 +548,6 @@ struct CreateKitScreen: View {
         }
         
         isProcessing = false
-    }
-    
-    /// Icono para cada tipo de kit (solo los que existen en KitType)
-    private func iconFor(_ type: KitType) -> String {
-        switch type {
-        case .SVA: return "cross.case.fill"
-        case .SVAe: return "cross.case.fill"
-        case .SVB: return "shippingbox.fill"
-        case .custom: return "star.fill"
-        }
     }
 }
 
@@ -489,8 +561,8 @@ struct CreateVehicleScreen: View {
     @State private var code = ""
     @State private var plate = ""
     @State private var selectedType: VehicleFS.VehicleType = .svb
-    @State private var bases: [BaseFS] = []
     @State private var selectedBaseId: String?
+    @State private var bases: [BaseFS] = []
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var showSuccess = false
@@ -501,19 +573,19 @@ struct CreateVehicleScreen: View {
                 TextField("Código (ej: AMB-001)", text: $code)
                     .textInputAutocapitalization(.characters)
                 
-                TextField("Matrícula", text: $plate)
+                TextField("Matrícula (opcional)", text: $plate)
                     .textInputAutocapitalization(.characters)
                 
-                Picker("Tipo", selection: $selectedType) {
+                Picker("Tipo de Vehículo", selection: $selectedType) {
                     ForEach(VehicleFS.VehicleType.allCases, id: \.self) { type in
-                        Text(type.shortName).tag(type)
+                        Text(type.displayName).tag(type)
                     }
                 }
                 
-                Picker("Base", selection: $selectedBaseId) {
-                    Text("— Sin asignar —").tag(String?.none)
+                Picker("Base (opcional)", selection: $selectedBaseId) {
+                    Text("Sin asignar").tag(nil as String?)
                     ForEach(bases) { base in
-                        Text(base.name).tag(Optional(base.id))
+                        Text("\(base.code) - \(base.name)").tag(base.id as String?)
                     }
                 }
             } header: {
@@ -547,7 +619,7 @@ struct CreateVehicleScreen: View {
         .navigationTitle("Nuevo Vehículo")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            bases = await BaseService.shared.getAllBases()
+            bases = await BaseService.shared.getActiveBases()
         }
         .alert("Vehículo Creado", isPresented: $showSuccess) {
             Button("OK") { dismiss() }
@@ -561,7 +633,6 @@ struct CreateVehicleScreen: View {
         errorMessage = nil
         
         do {
-            // Usar VehicleService.create() - NO createVehicle()
             _ = try await VehicleService.shared.create(
                 code: code,
                 plate: plate.isEmpty ? nil : plate,

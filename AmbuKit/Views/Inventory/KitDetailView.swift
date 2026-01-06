@@ -12,6 +12,7 @@
 //  - Indicadores de stock bajo/alto
 //  - Indicadores de caducidad
 //  - Permisos verificados
+//  - Botón de editar kit (Programador/Logística)
 //  NOTA: Usa KitItemRow de Views/Components/KitItemRow/
 //
 
@@ -33,6 +34,7 @@ struct KitDetailView: View {
     @State private var catalogDict: [String: CatalogItemFS] = [:]
     @State private var isLoading = true
     @State private var canUpdateStock = false
+    @State private var canEditKit = false  // ✅ NUEVO: Permiso para editar kit
     @State private var errorMessage: String?
     @State private var updatingItemId: String?
     
@@ -71,11 +73,23 @@ struct KitDetailView: View {
     
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        // Botón refresh
         ToolbarItem(placement: .primaryAction) {
             Button {
                 Task { await loadData() }
             } label: {
                 Image(systemName: "arrow.clockwise")
+            }
+        }
+        
+        // ✅ NUEVO: Botón Editar (solo Programador y Logística)
+        ToolbarItem(placement: .secondaryAction) {
+            if canEditKit {
+                NavigationLink {
+                    KitDetailEditView(kit: kit, currentUser: currentUser)
+                } label: {
+                    Label("Editar Kit", systemImage: "pencil.circle")
+                }
             }
         }
     }
@@ -311,11 +325,13 @@ struct KitDetailView: View {
         // Cargar en paralelo
         async let itemsTask = KitService.shared.getKitItems(kitId: kitId)
         async let catalogTask = CatalogService.shared.getAllItems()
-        async let permissionTask = AuthorizationServiceFS.allowed(.update, on: .kitItem, for: currentUser)
+        async let updatePermissionTask = AuthorizationServiceFS.allowed(.update, on: .kitItem, for: currentUser)
+        async let editKitPermissionTask = AuthorizationServiceFS.allowed(.update, on: .kit, for: currentUser)  // ✅ NUEVO
         
         items = await itemsTask
         let allCatalog = await catalogTask
-        canUpdateStock = await permissionTask
+        canUpdateStock = await updatePermissionTask
+        canEditKit = await editKitPermissionTask  // ✅ NUEVO
         
         // Crear diccionario de catálogo
         var catalog: [String: CatalogItemFS] = [:]
@@ -378,9 +394,3 @@ struct KitDetailView: View {
         )
     }
 }
-
-
-
-
-
-
