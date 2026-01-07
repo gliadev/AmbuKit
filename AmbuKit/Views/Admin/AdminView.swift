@@ -401,7 +401,7 @@ struct AdminView: View {
     private var usersSection: some View {
         Section {
             NavigationLink {
-                UsersListScreen(currentUser: currentUser)
+                UserManagementView(currentUser: currentUser)
             } label: {
                 HStack(spacing: 12) {
                     ZStack {
@@ -782,76 +782,6 @@ struct ThresholdsListScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             kits = await KitService.shared.getAllKits()
-            isLoading = false
-        }
-    }
-}
-
-// MARK: - Users List Screen (Placeholder)
-
-struct UsersListScreen: View {
-    let currentUser: UserFS
-    
-    @State private var users: [UserFS] = []
-    @State private var isLoading = true
-    
-    var body: some View {
-        Group {
-            if isLoading {
-                ProgressView("Cargando usuarios...")
-            } else if users.isEmpty {
-                ContentUnavailableView(
-                    "Sin usuarios",
-                    systemImage: "person.2",
-                    description: Text("No hay usuarios registrados.")
-                )
-            } else {
-                List(users) { user in
-                    HStack(spacing: 12) {
-                        // Avatar
-                        ZStack {
-                            Circle()
-                                .fill(Color.purple.opacity(0.15))
-                                .frame(width: 44, height: 44)
-                            
-                            Text(user.fullName.prefix(1).uppercased())
-                                .font(.headline)
-                                .foregroundStyle(.purple)
-                        }
-                        
-                        // Info
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(user.fullName)
-                                .font(.headline)
-                            
-                            Text("@\(user.username)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        // Status
-                        Circle()
-                            .fill(user.active ? Color.green : Color.red)
-                            .frame(width: 10, height: 10)
-                    }
-                }
-            }
-        }
-        .navigationTitle("Usuarios")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    // TODO: Crear usuario
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .task {
-            users = await UserService.shared.getAllUsers()
             isLoading = false
         }
     }

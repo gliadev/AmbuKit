@@ -829,20 +829,518 @@ struct VehicleDetailEditView: View {
     }
 }
 
-// MARK: - User Management View (Placeholder)
+// MARK: - User Management View
 
 struct UserManagementView: View {
     let currentUser: UserFS?
     
+    @State private var users: [UserFS] = []
+    @State private var roles: [RoleFS] = []
+    @State private var isLoading = true
+    @State private var showCreateSheet = false
+    @State private var selectedUser: UserFS?
+    @State private var toast: Toast?
+    @State private var searchText = ""
+    
+    var filteredUsers: [UserFS] {
+        if searchText.isEmpty {
+            return users
+        }
+        return users.filter {
+            $0.fullName.localizedCaseInsensitiveContains(searchText) ||
+            $0.username.localizedCaseInsensitiveContains(searchText) ||
+            $0.email.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
     var body: some View {
-        VStack(spacing: 20) {
-            EmptyStateView(
-                "Gestión de Usuarios",
-                message: "Funcionalidad en desarrollo",
-                icon: "person.2.fill"
-            )
+        Group {
+            if isLoading {
+                ProgressView("Cargando usuarios...")
+            } else if users.isEmpty {
+                emptyStateView
+            } else {
+                usersList
+            }
         }
         .navigationTitle("Gestión de Usuarios")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "Buscar usuarios...")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showCreateSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showCreateSheet) {
+            CreateUserSheet(currentUser: currentUser, roles: roles) {
+                Task { await loadUsers() }
+                toast = .success("Usuario creado correctamente")
+            }
+        }
+        .sheet(item: $selectedUser) { user in
+            UserDetailEditSheet(user: user, currentUser: currentUser, roles: roles) {
+                Task { await loadUsers() }
+            }
+        }
+        .task {
+            await loadUsers()
+        }
+        .toast($toast)
+    }
+    
+    // MARK: - Empty State
+    
+    private var emptyStateView: some View {
+        ContentUnavailableView {
+            Label("Sin usuarios", systemImage: "person.2")
+        } description: {
+            Text("No hay usuarios registrados.")
+        } actions: {
+            Button {
+                showCreateSheet = true
+            } label: {
+                Label("Crear Usuario", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+    
+    // MARK: - Users List
+    
+    private var usersList: some View {
+        List {
+            Section {
+                Text("\(users.count) usuario(s) registrado(s)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            ForEach(filteredUsers) { user in
+                Button {
+                    selectedUser = user
+                } label: {
+                    UserMgmtRow(user: user, roles: roles)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .refreshable {
+            await loadUsers()
+        }
+    }
+    
+    // MARK: - Load Users
+    
+    private func loadUsers() async {
+        isLoading = true
+        
+        async let usersTask = UserService.shared.getAllUsers()
+        async let rolesTask = PolicyService.shared.getAllRoles()
+        
+        users = await usersTask
+        roles = await rolesTask
+        
+        isLoading = false
+    }
+}
+
+// MARK: - User Mgmt Row
+
+struct UserMgmtRow: View {
+    let user: UserFS
+    let roles: [RoleFS]
+    
+    var role: RoleFS? {
+        roles.first(where: { $0.id == user.roleId })
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(roleColor.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                
+                Text(user.fullName.prefix(1).uppercased())
+                    .font(.headline)
+                    .foregroundStyle(roleColor)
+            }
+            
+            // Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(user.fullName)
+                    .font(.headline)
+                
+                Text("@\(user.username)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                // Badge de rol
+                if let role = role {
+                    Text(role.displayName)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(roleColor.opacity(0.15))
+                        .foregroundStyle(roleColor)
+                        .clipShape(Capsule())
+                }
+            }
+            
+            Spacer()
+            
+            // Estado
+            Circle()
+                .fill(user.active ? Color.green : Color.red)
+                .frame(width: 10, height: 10)
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private var roleColor: Color {
+        guard let role = role else { return .gray }
+        switch role.kind {
+        case .programmer: return .blue
+        case .logistics: return .orange
+        case .sanitary: return .green
+        }
+    }
+}
+
+// MARK: - Create User Sheet
+
+struct CreateUserSheet: View {
+    let currentUser: UserFS?
+    let roles: [RoleFS]
+    let onCreated: () -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var fullName = ""
+    @State private var username = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var selectedRoleId: String = ""
+    @State private var selectedBaseId: String?
+    @State private var bases: [BaseFS] = []
+    @State private var isActive = true
+    @State private var isProcessing = false
+    @State private var toast: Toast?
+    
+    var isValid: Bool {
+        !fullName.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !username.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !email.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !password.isEmpty &&
+        !selectedRoleId.isEmpty &&
+        password.count >= 6
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Información Personal") {
+                    TextField("Nombre completo", text: $fullName)
+                        .textContentType(.name)
+                    
+                    TextField("Usuario (sin @)", text: $username)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    
+                    TextField("Email", text: $email)
+                        .textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+                        .autocorrectionDisabled()
+                }
+                
+                Section {
+                    SecureField("Contraseña (mín. 6 caracteres)", text: $password)
+                        .textContentType(.newPassword)
+                } header: {
+                    Text("Credenciales")
+                } footer: {
+                    Text("La contraseña debe tener al menos 6 caracteres")
+                }
+                
+                Section("Rol y Permisos") {
+                    Picker("Rol", selection: $selectedRoleId) {
+                        Text("Seleccionar rol").tag("")
+                        ForEach(roles) { role in
+                            Text(role.displayName).tag(role.id ?? "")
+                        }
+                    }
+                    
+                    Picker("Base asignada", selection: $selectedBaseId) {
+                        Text("Sin asignar").tag(nil as String?)
+                        ForEach(bases) { base in
+                            Text("\(base.code) - \(base.name)").tag(base.id as String?)
+                        }
+                    }
+                    
+                    Toggle("Usuario activo", isOn: $isActive)
+                }
+            }
+            .navigationTitle("Nuevo Usuario")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Crear") {
+                        Task { await createUser() }
+                    }
+                    .disabled(!isValid || isProcessing)
+                }
+            }
+            .task {
+                bases = await BaseService.shared.getActiveBases()
+                if let firstRole = roles.first {
+                    selectedRoleId = firstRole.id ?? ""
+                }
+            }
+            .toast($toast)
+        }
+    }
+    
+    private func createUser() async {
+        isProcessing = true
+        
+        do {
+            _ = try await UserService.shared.create(
+                email: email.trimmingCharacters(in: .whitespaces),
+                password: password,
+                username: username.trimmingCharacters(in: .whitespaces),
+                fullName: fullName.trimmingCharacters(in: .whitespaces),
+                roleId: selectedRoleId,
+                baseId: selectedBaseId,
+                actor: currentUser
+            )
+            
+            onCreated()
+            dismiss()
+            
+        } catch {
+            toast = .error(error)
+        }
+        
+        isProcessing = false
+    }
+}
+
+// MARK: - User Detail Edit Sheet
+
+struct UserDetailEditSheet: View {
+    let user: UserFS
+    let currentUser: UserFS?
+    let roles: [RoleFS]
+    let onUpdated: () -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var fullName: String
+    @State private var username: String
+    @State private var email: String
+    @State private var selectedRoleId: String
+    @State private var selectedBaseId: String?
+    @State private var isActive: Bool
+    @State private var bases: [BaseFS] = []
+    @State private var isProcessing = false
+    @State private var toast: Toast?
+    @State private var showDeleteConfirmation = false
+    
+    init(user: UserFS, currentUser: UserFS?, roles: [RoleFS], onUpdated: @escaping () -> Void) {
+        self.user = user
+        self.currentUser = currentUser
+        self.roles = roles
+        self.onUpdated = onUpdated
+        
+        _fullName = State(initialValue: user.fullName)
+        _username = State(initialValue: user.username)
+        _email = State(initialValue: user.email)
+        _selectedRoleId = State(initialValue: user.roleId ?? "")
+        _selectedBaseId = State(initialValue: user.baseId)
+        _isActive = State(initialValue: user.active)
+    }
+    
+    var hasChanges: Bool {
+        fullName != user.fullName ||
+        username != user.username ||
+        email != user.email ||
+        selectedRoleId != (user.roleId ?? "") ||
+        selectedBaseId != user.baseId ||
+        isActive != user.active
+    }
+    
+    var isSelf: Bool {
+        user.id == currentUser?.id
+    }
+    
+    var isValid: Bool {
+        !fullName.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !username.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !email.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !selectedRoleId.isEmpty
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                // Info básica
+                Section("Información Personal") {
+                    TextField("Nombre completo", text: $fullName)
+                        .textContentType(.name)
+                    
+                    TextField("Usuario", text: $username)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    
+                    TextField("Email", text: $email)
+                        .textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+                        .autocorrectionDisabled()
+                }
+                
+                // Rol y base
+                Section {
+                    Picker("Rol", selection: $selectedRoleId) {
+                        ForEach(roles) { role in
+                            Text(role.displayName).tag(role.id ?? "")
+                        }
+                    }
+                    .disabled(isSelf)
+                    
+                    Picker("Base asignada", selection: $selectedBaseId) {
+                        Text("Sin asignar").tag(nil as String?)
+                        ForEach(bases) { base in
+                            Text("\(base.code) - \(base.name)").tag(base.id as String?)
+                        }
+                    }
+                    
+                    Toggle("Usuario activo", isOn: $isActive)
+                        .disabled(isSelf)
+                } header: {
+                    Text("Rol y Permisos")
+                } footer: {
+                    Group {
+                        if isSelf {
+                            Text("No puedes cambiar tu propio rol o desactivarte")
+                        }
+                    }
+                }
+                
+                // Info adicional
+                Section("Información del Sistema") {
+                    LabeledContent("ID", value: user.id ?? "N/A")
+                        .font(.caption.monospaced())
+                    
+                    LabeledContent("Creado", value: user.createdAt, format: .dateTime)
+                    
+                    LabeledContent("Actualizado", value: user.updatedAt, format: .dateTime)
+                }
+                
+                // Eliminar (solo si no eres tú)
+                if !isSelf {
+                    Section {
+                        Button("Eliminar Usuario", role: .destructive) {
+                            showDeleteConfirmation = true
+                        }
+                    } footer: {
+                        Text("Esta acción marcará al usuario como inactivo.")
+                    }
+                }
+            }
+            .navigationTitle(user.fullName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") {
+                        Task { await saveChanges() }
+                    }
+                    .disabled(!hasChanges || !isValid || isProcessing)
+                }
+            }
+            .task {
+                bases = await BaseService.shared.getActiveBases()
+            }
+            .toast($toast)
+            .alert("Eliminar Usuario", isPresented: $showDeleteConfirmation) {
+                Button("Cancelar", role: .cancel) { }
+                Button("Eliminar", role: .destructive) {
+                    Task { await deleteUser() }
+                }
+            } message: {
+                Text("¿Estás seguro de que quieres eliminar a '\(user.fullName)'? Esta acción marcará al usuario como inactivo.")
+            }
+        }
+    }
+    
+    // MARK: - Save Changes
+    
+    private func saveChanges() async {
+        isProcessing = true
+        
+        do {
+            var updatedUser = user
+            updatedUser.fullName = fullName.trimmingCharacters(in: .whitespaces)
+            updatedUser.username = username.trimmingCharacters(in: .whitespaces)
+            updatedUser.email = email.trimmingCharacters(in: .whitespaces)
+            updatedUser.roleId = selectedRoleId
+            updatedUser.baseId = selectedBaseId
+            updatedUser.active = isActive
+            
+            try await UserService.shared.update(user: updatedUser, actor: currentUser)
+            
+            toast = .success("Usuario actualizado correctamente")
+            onUpdated()
+            
+            try? await Task.sleep(for: .seconds(0.5))
+            dismiss()
+            
+        } catch {
+            toast = .error(error)
+        }
+        
+        isProcessing = false
+    }
+    
+    // MARK: - Delete User
+    
+    private func deleteUser() async {
+        guard let userId = user.id else {
+            toast = .error("El usuario no tiene ID válido")
+            return
+        }
+        
+        isProcessing = true
+        
+        do {
+            try await UserService.shared.delete(userId: userId, actor: currentUser)
+            
+            toast = .success("Usuario eliminado correctamente")
+            onUpdated()
+            
+            try? await Task.sleep(for: .seconds(0.5))
+            dismiss()
+            
+        } catch {
+            toast = .error(error)
+        }
+        
+        isProcessing = false
     }
 }
 
