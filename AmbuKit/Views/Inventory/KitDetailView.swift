@@ -41,6 +41,7 @@ struct KitDetailView: View {
     // MARK: - Environment
     
     @Environment(\.dismiss) private var dismiss
+    @State private var showAuditSheet = false
     
     // MARK: - Body
     
@@ -171,23 +172,31 @@ struct KitDetailView: View {
                     .clipShape(Capsule())
             }
             
-            // Última auditoría
-            HStack {
-                Label("Auditoría", systemImage: "clipboard")
-                Spacer()
-                if let lastAudit = kit.lastAudit {
-                    Text(lastAudit, style: .date)
-                        .foregroundStyle(kit.needsAudit ? .orange : .secondary)
-                } else {
-                    Text("Nunca")
-                        .foregroundStyle(.orange)
-                }
-                
-                if kit.needsAudit {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                }
-            }
+            // Última auditoría - CLICKEABLE
+                        Button {
+                            showAuditSheet = true
+                        } label: {
+                            HStack {
+                                Label("Auditoría", systemImage: "clipboard")
+                                Spacer()
+                                if let lastAudit = kit.lastAudit {
+                                    Text(lastAudit, style: .date)
+                                        .foregroundStyle(kit.needsAudit ? .orange : .secondary)
+                                } else {
+                                    Text("Nunca")
+                                        .foregroundStyle(.orange)
+                                }
+                                
+                                if kit.needsAudit {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+            
+            
+            
             
             // Asignación
             HStack {

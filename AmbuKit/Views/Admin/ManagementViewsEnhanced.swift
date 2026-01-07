@@ -8,6 +8,7 @@
 //  FUNCIONALIDADES AÑADIDAS:
 //  - KitDetailEditView: Añadir/quitar items del catálogo
 //  - BaseDetailEditView: Ver y desasignar vehículos
+//  - ✅ NUEVO: Campo caducidad opcional al añadir items
 //
 
 import SwiftUI
@@ -284,6 +285,27 @@ struct KitItemEditRow: View {
                             .foregroundStyle(.red)
                             .clipShape(Capsule())
                     }
+                    
+                    // ✅ TAREA D: Badge de caducidad
+                    if let expiry = item.expiry {
+                        if item.isExpired {
+                            Text("CADUCADO")
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(.red.opacity(0.2))
+                                .foregroundStyle(.red)
+                                .clipShape(Capsule())
+                        } else if item.isExpiringSoon {
+                            Text("CADUCA PRONTO")
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(.orange.opacity(0.2))
+                                .foregroundStyle(.orange)
+                                .clipShape(Capsule())
+                        }
+                    }
                 }
             }
             
@@ -326,6 +348,10 @@ struct AddItemToKitSheet: View {
     
     // Sheet para crear nuevo item de catálogo
     @State private var showCreateCatalogItem = false
+    
+    // ✅ TAREA D: Caducidad opcional
+    @State private var hasExpiry = false
+    @State private var expiryDate = Date().addingTimeInterval(86400 * 365) // 1 año por defecto
     
     var availableItems: [CatalogItemFS] {
         catalogItems.filter { item in
@@ -500,6 +526,27 @@ struct AddItemToKitSheet: View {
                 }
             }
             
+            // ✅ TAREA D: Caducidad opcional
+            Section {
+                Toggle("¿Tiene fecha de caducidad?", isOn: $hasExpiry)
+                
+                if hasExpiry {
+                    DatePicker(
+                        "Fecha de caducidad",
+                        selection: $expiryDate,
+                        in: Date()...,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.compact)
+                }
+            } header: {
+                Text("Caducidad")
+            } footer: {
+                Text("Solo para items consumibles o farmacológicos. Los items sin caducidad (ej: instrumental) pueden dejarse sin fecha.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
             // Resumen
             Section("Resumen") {
                 if quantity < minQuantity {
@@ -508,6 +555,12 @@ struct AddItemToKitSheet: View {
                 } else {
                     Label("Stock OK", systemImage: "checkmark.circle")
                         .foregroundStyle(.green)
+                }
+                
+                // ✅ TAREA D: Mostrar caducidad si está activa
+                if hasExpiry {
+                    Label("Caduca: \(expiryDate.formatted(date: .abbreviated, time: .omitted))", systemImage: "calendar")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -529,7 +582,7 @@ struct AddItemToKitSheet: View {
                 quantity: quantity,
                 min: minQuantity,
                 max: maxQuantity > minQuantity ? maxQuantity : nil,
-                expiry: nil,
+                expiry: hasExpiry ? expiryDate : nil,  // ✅ TAREA D: Usar caducidad si está activa
                 lot: nil,
                 actor: currentUser
             )

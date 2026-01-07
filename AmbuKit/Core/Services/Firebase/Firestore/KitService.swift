@@ -5,6 +5,8 @@
 //  Created by Adolfo on 18/11/25.
 //  CORREGIDO: TAREA A+B - Uso correcto de async/await en creación
 //
+//  TAREA D: Método auditKit() añadido
+//
 
 
 import Foundation
@@ -306,6 +308,47 @@ final class KitService: ObservableObject {
     }
     
     func getKitsNeedingAudit() async -> [KitFS] { return await getAllKits().filter { $0.needsAudit } }
+    
+    // MARK: - Audit Kit
+    
+    /// Registra una auditoría para un kit
+    ///
+    /// Actualiza la fecha de última auditoría y registra la acción en el sistema.
+    ///
+    /// - Parameters:
+    ///   - kitId: ID del kit a auditar
+    ///   - notes: Observaciones opcionales de la auditoría
+    ///   - actor: Usuario que realiza la auditoría
+    ///
+    /// - Throws: KitServiceError si el kit no existe o hay problemas de permisos
+    func auditKit(kitId: String, notes: String?, actor: UserFS?) async throws {
+        // 1. Validar permisos (mismos que update)
+        guard await AuthorizationServiceFS.allowed(.update, on: .kit, for: actor) else {
+            throw KitServiceError.unauthorized("No tienes permisos para auditar kits")
+        }
+        
+        // 2. Obtener kit actual
+        guard var kit = await getKit(id: kitId) else {
+            throw KitServiceError.kitNotFound("Kit '\(kitId)' no encontrado")
+        }
+        
+        // 3. Actualizar fechas
+        kit.lastAudit = Date()
+        kit.updatedAt = Date()
+        
+        // 4. Guardar en Firestore
+        let encodedData = try Firestore.Encoder().encode(kit)
+        try await db.collection(KitFS.collectionName).document(kitId).setData(encodedData, merge: true)
+        
+        // 5. Actualizar caché
+        kitCache[kitId] = kit
+        
+        // 6. Registrar en auditoría
+        let details = notes.map { "Auditoría registrada. Observaciones: \($0)" } ?? "Auditoría registrada"
+        await AuditServiceFS.log(.update, entity: .kit, entityId: kitId, actor: actor, details: details)
+        
+        print("✅ Kit '\(kit.code)' auditado correctamente")
+    }
 }
 
 // MARK: - Errors
