@@ -44,6 +44,7 @@ AmbuKit ofrece:
 ---
 
 ## 📱 Capturas de Pantalla
+![ipadPro](https://github.com/user-attachments/assets/9d9dac1b-1a34-48dc-a64d-fee5a520d817)
 
 
 
