@@ -76,10 +76,8 @@ struct KitManagementView: View {
         .navigationTitle("Gestión de Kits")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
+                Button("Añadir", systemImage: "plus") {
                     showCreateSheet = true
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }
@@ -316,10 +314,8 @@ struct BaseManagementView: View {
         .navigationTitle("Gestión de Bases")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
+                Button("Añadir", systemImage: "plus") {
                     showCreateSheet = true
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }
@@ -546,10 +542,8 @@ struct VehicleManagementView: View {
         .navigationTitle("Gestión de Vehículos")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
+                Button("Añadir", systemImage: "plus") {
                     showCreateSheet = true
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }
@@ -859,10 +853,8 @@ struct UserManagementView: View {
         .searchable(text: $searchText, prompt: "Buscar usuarios...")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
+                Button("Añadir", systemImage: "plus") {
                     showCreateSheet = true
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }

@@ -67,7 +67,7 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 - **Problema:** Llama a `UITabBarAppearance` via UIKit solo para configurar apariencia por defecto. No añade comportamiento exclusivo.
 - **Fix:** Eliminar `configureTabBarAppearance()`. En iOS 26 la apariencia por defecto es correcta.
 
-### 🔴 M12 — Stats de VehiclesView: cinco pasadas sobre el mismo array
+### ✅ M12 — Stats de VehiclesView: cinco pasadas sobre el mismo array
 - **Archivo:** `Views/Vehicles/VehiclesView.swift:97–101`
 - **Problema:** `svaCount`, `svbCount`, `withBaseCount`, `withKitsCount`, `totalCount` iteran el array cinco veces en cinco computed properties separadas.
 - **Fix:** Calcular todo en una sola pasada dentro de `loadData()` o con una struct `VehicleStats`.
@@ -104,13 +104,13 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 
 ## Tests — Prioridad ALTA
 
-### 🔴 T1 — Migrar todas las suites de XCTest a Swift Testing
+### ✅ T1 — Migrar todas las suites de XCTest a Swift Testing
 - **Archivos:** `AmbuKitTests/Firebase/Services/*.swift`, `AmbuKitTests/IntegrationTest/*.swift`, `AmbuKitTests/Utilities/ValidatorsTests.swift`
 - **Problema:** Todos los tests (salvo el placeholder) usan `XCTestCase`, `XCTAssert*`, `setUp()`/`tearDown()`, `XCTSkip` y `XCTFail`. Swift Testing es el estándar moderno, soporta ejecución paralela por defecto y macros más expresivas.
 - **Fix:** Convertir cada `final class … : XCTestCase` en `struct`. Reemplazar `setUp`/`tearDown` por `init()`. Sustituir `XCTAssert*` por `#expect`/`#require`, `XCTFail` por `Issue.record()`, y `XCTSkip` por el trait `.enabled(if:)` o `#require`.
 - **Nota:** No migrar `AmbuKitUITests/` — UI tests requieren XCTest.
 
-### 🔴 T2 — `XCTAssertTrue(true)` / aserciones no-op que dan falsa cobertura
+### ✅ T2 — `XCTAssertTrue(true)` / aserciones no-op que dan falsa cobertura
 - **Archivos:**
   - `UserServiceTests.swift:499,514` — catch de `testDeleteUser_WithoutPermissions_Fails` y `testDeleteUser_Self_Fails`
   - `VehicleServiceTests.swift:168,191,220,244` — varios catch con `XCTAssertTrue(true)`
@@ -119,7 +119,7 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 - **Problema:** `XCTAssertTrue(true)` siempre pasa. En catch blocks hace que el test sea verde incluso si se lanza el error equivocado. En `testCrossServiceConsistency` la aserción `XCTAssertNotNil(vehicle)` solo se ejecuta si `vehicle != nil`, exactamente la condición inversa.
 - **Fix:** En catch: `#expect(error is VehicleServiceError)`. En `testAllModelsSendable`: eliminar (verificación en tiempo de compilación). En `testCrossServiceConsistency`: invertir lógica con `#expect(vehicle != nil, "...")` dentro del `for`.
 
-### 🔴 T3 — `Task.sleep(nanoseconds:)` deprecated en tests
+### ✅ T3 — `Task.sleep(nanoseconds:)` deprecated en tests
 - **Archivos:** `VehicleServiceTests.swift:400`, `InventoryFlowTests.swift:169`
 - **Fix:** `Task.sleep(for: .seconds(1))` y `Task.sleep(for: .milliseconds(500))`.
 
@@ -127,7 +127,7 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 
 ## Tests — Prioridad MEDIA
 
-### 🔴 T4 — Tests repetitivos que deberían ser parametrizados
+### ✅ T4 — Tests repetitivos que deberían ser parametrizados
 - **Archivos:**
   - `PolicyServiceTests.swift` — `testGetRoleProgrammerExists`, `testGetRoleLogisticsExists`, `testGetRoleSanitaryExists` (3 tests idénticos variando solo el `RoleKind`)
   - `PolicyServiceTests.swift` — `testIsProgrammerHelper`, `testIsLogisticsHelper`, `testIsSanitaryHelper`
@@ -142,12 +142,12 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
   func createVehicle_AllTypes(_ type: VehicleFS.VehicleType) async throws { … }
   ```
 
-### 🔴 T5 — Force unwraps en tests deberían usar `try #require`
+### ✅ T5 — Force unwraps en tests deberían usar `try #require`
 - **Archivos:** `VehicleServiceTests.swift:139,311`, `SyncFlowTests.swift:135`, `InventoryFlowTests.swift:134,197,248,293,374`, `AuthFlowTests.swift:74,215`
 - **Problema:** `vehicle.id!`, `kit.id!`, `initialUsers.first!.id!` crashean el proceso completo en lugar de fallar el test limpiamente.
 - **Fix:** `try #require(vehicle.id)`. Se aplica de forma natural al migrar a Swift Testing (T1).
 
-### 🔴 T6 — Falta de tags para categorizar y filtrar tests
+### ✅ T6 — Falta de tags para categorizar y filtrar tests
 - **Archivos:** Todos los archivos de test
 - **Fix:** Declarar tags en `AmbuKitTests/Tags.swift`:
   ```swift
@@ -160,17 +160,17 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
   ```
   Aplicar `@Suite(.tags(.firebase, .slow))` a suites Firebase y `@Test(.tags(.unit))` a `ValidatorsTests` y `ModelEncodingTests`.
 
-### 🔴 T7 — `@MainActor` innecesario en suites de tests puros
+### ⏸️ T7 — `@MainActor` innecesario en suites de tests puros
 - **Archivos:** `ValidatorsTests.swift:14`, `ModelEncodingTests.swift:19`
 - **Problema:** `Validators` y los modelos FS son tipos de valor puros. `@MainActor` en la suite fuerza todos los tests al hilo principal innecesariamente.
 - **Fix:** Eliminar `@MainActor` de `ValidatorsTests` y `ModelEncodingTests`.
 
-### 🔴 T8 — Comprobación de errores demasiado permisiva (string matching)
+### ✅ T8 — Comprobación de errores demasiado permisiva (string matching)
 - **Archivos:** `UserServiceTests.swift:202-208,244-250,386-390,444-447`
 - **Problema:** `error.localizedDescription.lowercased().contains("autoriz")` pasa con cualquier error que contenga esa substring.
 - **Fix:** `#expect(error is UserServiceError)` o `#expect(throws: UserServiceError.unauthorized) { … }`.
 
-### 🔴 T9 — Tests de integración sin límite de tiempo
+### ✅ T9 — Tests de integración sin límite de tiempo
 - **Archivos:** `AuthFlowTests.swift`, `SyncFlowTests.swift`, `InventoryFlowTests.swift`
 - **Problema:** Tests contra Firebase real pueden colgar indefinidamente si hay problemas de red.
 - **Fix:**
@@ -179,7 +179,7 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
   struct AuthFlowTests { … }
   ```
 
-### 🔴 T10 — Aserciones trivialmente verdaderas sobre no-opcionales
+### ✅ T10 — Aserciones trivialmente verdaderas sobre no-opcionales
 - **Archivos:** `AuthFlowTests.swift:116-118`
 - **Problema:** `XCTAssertNotNil(users)` donde `users: [UserFS]` (array, nunca nil).
 - **Fix:** `#expect(users.isEmpty == false)`.
@@ -188,11 +188,11 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 
 ## Tests — Prioridad BAJA
 
-### 🔴 T11 — Placeholder de test vacío
+### ✅ T11 — Placeholder de test vacío
 - **Archivo:** `AmbuKitTests/AmbuKitTests.swift`
 - **Fix:** Eliminar o reemplazar con un smoke test real (p. ej., verificar que los enums básicos son codificables).
 
-### 🔴 T12 — Trailing whitespace excesivo en varios archivos
+### ✅ T12 — Trailing whitespace excesivo en varios archivos
 - **Archivos:** `UserServiceTests.swift` (lines 581–619), `InventoryFlowTests.swift` (lines 433–476), `SyncFlowTests.swift`
 - **Fix:** Eliminar las 30–40 líneas en blanco al final de cada archivo.
 
@@ -213,17 +213,17 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 - **Archivos:** `MainTabView.swift:301`, `AdminView.swift:460`, `ProfileView.swift:202`
 - **Fix:** Añadir `var color: Color` como extensión de `RoleKind`.
 
-### 🔴 M15 — Icon-only buttons sin label de texto
+### ✅ M15 — Icon-only buttons sin label de texto
 - **Archivos:** `Views/Inventory/InventoryView.swift:108`, `ManagementViews.swift:82`, `KitDetailView.swift:82`
 - **Problema:** VoiceOver no puede describir la acción correctamente.
 - **Fix:** `Button("Filtrar", systemImage: "line.3.horizontal.decrease.circle") { ... }` con `.labelStyle(.iconOnly)` si hace falta mantener el aspecto visual.
 
-### 🔴 M16 — Estado de filtros comunicado solo por color
+### ✅ M16 — Estado de filtros comunicado solo por color
 - **Archivo:** `Views/Vehicles/VehiclesView.swift:283–305` (VehicleFilterChip)
 - **Problema:** Chip seleccionado = fondo azul; sin indicador para usuarios con daltonismo.
 - **Fix:** Añadir checkmark o borde, o respetar `.accessibilityDifferentiateWithoutColor`.
 
-### 🔴 M17 — `caption2` usado en múltiples vistas
+### ✅ M17 — `caption2` usado en múltiples vistas
 - **Archivos:** `MainTabView.swift:319,322`, `InventoryView.swift:237`, `VehiclesView.swift:270,295,411`
 - **Problema:** `.caption2` es extremadamente pequeño; el design guide lo marca como "generally best avoided".
 - **Fix:** Evaluar si `.caption` es suficiente en cada caso.

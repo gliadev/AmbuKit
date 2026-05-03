@@ -68,47 +68,29 @@ struct InventoryView: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    loadingView
+                    InventoryLoadingView()
                 } else if kits.isEmpty {
-                    emptyStateView
+                    InventoryEmptyStateView()
                 } else {
-                    kitsList
+                    InventoryKitsList(
+                        filteredKits: filteredKits,
+                        kits: kits,
+                        currentUser: currentUser,
+                        onRefresh: { await loadKits() }
+                    )
                 }
             }
             .navigationTitle("Inventario")
             .searchable(text: $searchText, prompt: "Buscar kits...")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    filterMenu
+                    InventoryFilterMenu(selectedFilter: $selectedFilter)
                 }
             }
         }
         .task {
             await loadKits()
         }
-    }
-    
-    // MARK: - Subviews
-
-    private var filterMenu: some View {
-        InventoryFilterMenu(selectedFilter: $selectedFilter)
-    }
-
-    private var loadingView: some View {
-        InventoryLoadingView()
-    }
-
-    private var emptyStateView: some View {
-        InventoryEmptyStateView()
-    }
-
-    private var kitsList: some View {
-        InventoryKitsList(
-            filteredKits: filteredKits,
-            kits: kits,
-            currentUser: currentUser,
-            onRefresh: { await loadKits() }
-        )
     }
 
     // MARK: - Load Kits
@@ -166,9 +148,12 @@ private struct InventoryFilterMenu: View {
                 }
             }
         } label: {
-            Image(systemName: selectedFilter == .all
-                  ? "line.3.horizontal.decrease.circle"
-                  : "line.3.horizontal.decrease.circle.fill")
+            Label(
+                "Filtrar",
+                systemImage: selectedFilter == .all
+                    ? "line.3.horizontal.decrease.circle"
+                    : "line.3.horizontal.decrease.circle.fill"
+            )
         }
     }
 }

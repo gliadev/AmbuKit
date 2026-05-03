@@ -2,27 +2,22 @@
 //  ModelEncodingTests.swift
 //  AmbuKitTests
 //
-//  Created by Adolfo on 20/12/25.
-//
 //  Tests para verificar que todos los modelos Firebase (FS) se pueden
 //  codificar y decodificar correctamente.
 //
-//  NOTA: Los tests de JSONEncoder se eliminaron porque @DocumentID
-//  solo puede codificarse con Firestore.Encoder (limitación de Firebase).
-//
 
-import XCTest
+import Testing
 @testable import AmbuKit
+import Foundation
 
-/// Tests de validación para modelos Firebase
 @MainActor
-final class ModelEncodingTests: XCTestCase {
-    
+@Suite(.tags(.unit))
+struct ModelEncodingTests {
+
     // MARK: - PolicyFS Tests
-    
-    /// Verifica computed properties de PolicyFS
-    func testPolicyFSComputedProperties() {
-        // Given: Policy con acceso completo
+
+    @Test("PolicyFS computed properties")
+    func policyFSComputedProperties() {
         let fullAccess = PolicyFS(
             entity: .kit,
             canCreate: true,
@@ -31,8 +26,7 @@ final class ModelEncodingTests: XCTestCase {
             canDelete: true,
             roleId: "test"
         )
-        
-        // Given: Policy de solo lectura
+
         let readOnly = PolicyFS(
             entity: .user,
             canCreate: false,
@@ -41,26 +35,23 @@ final class ModelEncodingTests: XCTestCase {
             canDelete: false,
             roleId: "test"
         )
-        
-        // Then
-        XCTAssertTrue(fullAccess.hasFullAccess)
-        XCTAssertFalse(fullAccess.isReadOnly)
-        
-        XCTAssertFalse(readOnly.hasFullAccess)
-        XCTAssertTrue(readOnly.isReadOnly)
-        
-        // Verificar hasPermission
-        XCTAssertTrue(fullAccess.hasPermission(for: .create))
-        XCTAssertTrue(fullAccess.hasPermission(for: .delete))
-        XCTAssertFalse(readOnly.hasPermission(for: .create))
-        XCTAssertTrue(readOnly.hasPermission(for: .read))
+
+        #expect(fullAccess.hasFullAccess)
+        #expect(!fullAccess.isReadOnly)
+
+        #expect(!readOnly.hasFullAccess)
+        #expect(readOnly.isReadOnly)
+
+        #expect(fullAccess.hasPermission(for: .create))
+        #expect(fullAccess.hasPermission(for: .delete))
+        #expect(!readOnly.hasPermission(for: .create))
+        #expect(readOnly.hasPermission(for: .read))
     }
-    
+
     // MARK: - KitFS Tests
-    
-    /// Verifica computed properties de KitFS
-    func testKitFSComputedProperties() {
-        // Given: Kit asignado a vehículo
+
+    @Test("KitFS computed properties")
+    func kitFSComputedProperties() {
         let assignedKit = KitFS(
             code: "KIT001",
             name: "Kit Asignado",
@@ -68,8 +59,7 @@ final class ModelEncodingTests: XCTestCase {
             status: .active,
             vehicleId: "vehicle_1"
         )
-        
-        // Given: Kit sin asignar
+
         let unassignedKit = KitFS(
             code: "KIT002",
             name: "Kit Sin Asignar",
@@ -77,158 +67,111 @@ final class ModelEncodingTests: XCTestCase {
             status: .active,
             vehicleId: nil
         )
-        
-        // Then
-        XCTAssertTrue(assignedKit.isAssigned)
-        XCTAssertFalse(unassignedKit.isAssigned)
+
+        #expect(assignedKit.isAssigned)
+        #expect(!unassignedKit.isAssigned)
     }
-    
+
     // MARK: - KitItemFS Tests
-    
-    /// Verifica computed properties de KitItemFS
-    func testKitItemFSStockStatus() {
-        // Given: Stock OK
+
+    @Test("KitItemFS stock status")
+    func kitItemFSStockStatus() {
         let okItem = KitItemFS(quantity: 20, min: 10, max: 50)
-        
-        // Given: Stock bajo
         let lowItem = KitItemFS(quantity: 3, min: 10, max: 50)
-        
-        // Given: Stock alto
         let highItem = KitItemFS(quantity: 60, min: 10, max: 50)
-        
-        // Then
-        XCTAssertEqual(okItem.stockStatus, .ok)
-        XCTAssertFalse(okItem.isBelowMinimum)
-        XCTAssertFalse(okItem.isAboveMaximum)
-        
-        XCTAssertEqual(lowItem.stockStatus, .low)
-        XCTAssertTrue(lowItem.isBelowMinimum)
-        
-        XCTAssertEqual(highItem.stockStatus, .high)
-        XCTAssertTrue(highItem.isAboveMaximum)
+
+        #expect(okItem.stockStatus == .ok)
+        #expect(!okItem.isBelowMinimum)
+        #expect(!okItem.isAboveMaximum)
+
+        #expect(lowItem.stockStatus == .low)
+        #expect(lowItem.isBelowMinimum)
+
+        #expect(highItem.stockStatus == .high)
+        #expect(highItem.isAboveMaximum)
     }
-    
-    /// Verifica lógica de caducidad de KitItemFS
-    func testKitItemFSExpiryLogic() {
-        // Given: Item caducado
+
+    @Test("KitItemFS expiry logic")
+    func kitItemFSExpiryLogic() {
         let expiredItem = KitItemFS(
             quantity: 10,
             min: 5,
-            expiry: Date().addingTimeInterval(-86400) // Ayer
+            expiry: Date().addingTimeInterval(-86400)
         )
-        
-        // Given: Item próximo a caducar
+
         let expiringItem = KitItemFS(
             quantity: 10,
             min: 5,
-            expiry: Date().addingTimeInterval(86400 * 15) // 15 días
+            expiry: Date().addingTimeInterval(86400 * 15)
         )
-        
-        // Given: Item sin caducidad
+
         let noExpiryItem = KitItemFS(
             quantity: 10,
             min: 5,
             expiry: nil
         )
-        
-        // Then
-        XCTAssertTrue(expiredItem.isExpired)
-        XCTAssertFalse(expiredItem.isExpiringSoon)
-        
-        XCTAssertFalse(expiringItem.isExpired)
-        XCTAssertTrue(expiringItem.isExpiringSoon)
-        
-        XCTAssertFalse(noExpiryItem.isExpired)
-        XCTAssertFalse(noExpiryItem.isExpiringSoon)
-        XCTAssertFalse(noExpiryItem.hasExpiry)
+
+        #expect(expiredItem.isExpired)
+        #expect(!expiredItem.isExpiringSoon)
+
+        #expect(!expiringItem.isExpired)
+        #expect(expiringItem.isExpiringSoon)
+
+        #expect(!noExpiryItem.isExpired)
+        #expect(!noExpiryItem.isExpiringSoon)
+        #expect(!noExpiryItem.hasExpiry)
     }
-    
-    // MARK: - Enum Codable Tests
-    
-    /// Verifica codificación de RoleKind
-    func testRoleKindCodable() throws {
-        let kinds: [RoleKind] = [.programmer, .logistics, .sanitary]
-        
-        for kind in kinds {
-            let encoded = try JSONEncoder().encode(kind)
-            let decoded = try JSONDecoder().decode(RoleKind.self, from: encoded)
-            XCTAssertEqual(kind, decoded, "Fallo en RoleKind: \(kind)")
-        }
+
+    // MARK: - Enum Codable Tests (parametrized)
+
+    @Test("RoleKind Codable", arguments: RoleKind.allCases)
+    func roleKindCodable(_ kind: RoleKind) throws {
+        let encoded = try JSONEncoder().encode(kind)
+        let decoded = try JSONDecoder().decode(RoleKind.self, from: encoded)
+        #expect(kind == decoded)
     }
-    
-    /// Verifica codificación de EntityKind
-    func testEntityKindCodable() throws {
-        for entity in EntityKind.allCases {
-            let encoded = try JSONEncoder().encode(entity)
-            let decoded = try JSONDecoder().decode(EntityKind.self, from: encoded)
-            XCTAssertEqual(entity, decoded, "Fallo en EntityKind: \(entity)")
-        }
+
+    @Test("EntityKind Codable", arguments: EntityKind.allCases)
+    func entityKindCodable(_ entity: EntityKind) throws {
+        let encoded = try JSONEncoder().encode(entity)
+        let decoded = try JSONDecoder().decode(EntityKind.self, from: encoded)
+        #expect(entity == decoded)
     }
-    
-    /// Verifica codificación de ActionKind
-    func testActionKindCodable() throws {
-        for action in ActionKind.allCases {
-            let encoded = try JSONEncoder().encode(action)
-            let decoded = try JSONDecoder().decode(ActionKind.self, from: encoded)
-            XCTAssertEqual(action, decoded, "Fallo en ActionKind: \(action)")
-        }
+
+    @Test("ActionKind Codable", arguments: ActionKind.allCases)
+    func actionKindCodable(_ action: ActionKind) throws {
+        let encoded = try JSONEncoder().encode(action)
+        let decoded = try JSONDecoder().decode(ActionKind.self, from: encoded)
+        #expect(action == decoded)
     }
-    
-    /// Verifica codificación de KitType
-    func testKitTypeCodable() throws {
-        for kitType in KitType.allCases {
-            let encoded = try JSONEncoder().encode(kitType)
-            let decoded = try JSONDecoder().decode(KitType.self, from: encoded)
-            XCTAssertEqual(kitType, decoded, "Fallo en KitType: \(kitType)")
-        }
+
+    @Test("KitType Codable", arguments: KitType.allCases)
+    func kitTypeCodable(_ kitType: KitType) throws {
+        let encoded = try JSONEncoder().encode(kitType)
+        let decoded = try JSONDecoder().decode(KitType.self, from: encoded)
+        #expect(kitType == decoded)
     }
-    
-    // MARK: - Sendable Conformance Tests
-    
-    /// Verifica que todos los modelos conforman Sendable
-    func testAllModelsSendable() {
-        func checkSendable<T: Sendable>(_: T.Type) {}
-        
-        // Auth models
-        checkSendable(UserFS.self)
-        checkSendable(RoleFS.self)
-        checkSendable(PolicyFS.self)
-        
-        // Inventory models
-        checkSendable(BaseFS.self)
-        checkSendable(VehicleFS.self)
-        checkSendable(KitFS.self)
-        
-        // Enums
-        checkSendable(RoleKind.self)
-        checkSendable(EntityKind.self)
-        checkSendable(ActionKind.self)
-        checkSendable(KitType.self)
-        
-        XCTAssertTrue(true, "Todos los modelos conforman Sendable")
-    }
-    
+
     // MARK: - Collection Name Tests
-    
-    /// Verifica que todos los modelos tienen collectionName definido
-    func testAllModelsHaveCollectionName() {
-        XCTAssertFalse(UserFS.collectionName.isEmpty)
-        XCTAssertFalse(RoleFS.collectionName.isEmpty)
-        XCTAssertFalse(PolicyFS.collectionName.isEmpty)
-        XCTAssertFalse(BaseFS.collectionName.isEmpty)
-        XCTAssertFalse(VehicleFS.collectionName.isEmpty)
-        XCTAssertFalse(KitFS.collectionName.isEmpty)
-        XCTAssertFalse(KitItemFS.collectionName.isEmpty)
-        XCTAssertFalse(CatalogItemFS.collectionName.isEmpty)
-        
-        // Verificar nombres esperados
-        XCTAssertEqual(UserFS.collectionName, "users")
-        XCTAssertEqual(RoleFS.collectionName, "roles")
-        XCTAssertEqual(PolicyFS.collectionName, "policies")
-        XCTAssertEqual(BaseFS.collectionName, "bases")
-        XCTAssertEqual(VehicleFS.collectionName, "vehicles")
-        XCTAssertEqual(KitFS.collectionName, "kits")
-        XCTAssertEqual(KitItemFS.collectionName, "kitItems")
-        XCTAssertEqual(CatalogItemFS.collectionName, "catalogItems")
+
+    @Test("Modelos tienen collectionName definido")
+    func allModelsHaveCollectionName() {
+        #expect(!UserFS.collectionName.isEmpty)
+        #expect(!RoleFS.collectionName.isEmpty)
+        #expect(!PolicyFS.collectionName.isEmpty)
+        #expect(!BaseFS.collectionName.isEmpty)
+        #expect(!VehicleFS.collectionName.isEmpty)
+        #expect(!KitFS.collectionName.isEmpty)
+        #expect(!KitItemFS.collectionName.isEmpty)
+        #expect(!CatalogItemFS.collectionName.isEmpty)
+
+        #expect(UserFS.collectionName == "users")
+        #expect(RoleFS.collectionName == "roles")
+        #expect(PolicyFS.collectionName == "policies")
+        #expect(BaseFS.collectionName == "bases")
+        #expect(VehicleFS.collectionName == "vehicles")
+        #expect(KitFS.collectionName == "kits")
+        #expect(KitItemFS.collectionName == "kitItems")
+        #expect(CatalogItemFS.collectionName == "catalogItems")
     }
 }

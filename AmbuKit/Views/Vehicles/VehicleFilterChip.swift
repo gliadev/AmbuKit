@@ -18,6 +18,10 @@ struct VehicleFilterChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.caption2.bold())
+                }
                 Image(systemName: icon)
                     .font(.caption)
                 Text(title)
@@ -28,7 +32,12 @@ struct VehicleFilterChip: View {
             .background(isSelected ? Color.blue : Color(.systemGray5))
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(.primary.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
+            )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

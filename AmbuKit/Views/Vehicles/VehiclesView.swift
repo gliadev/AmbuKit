@@ -28,6 +28,7 @@ struct VehiclesView: View {
     
     @State private var vehicles: [VehicleFS] = []
     @State private var bases: [BaseFS] = []
+    @State private var stats: VehicleStats = .empty
     @State private var isLoading = true
     @State private var searchText = ""
     @State private var selectedFilter: VehicleFilter = .all
@@ -91,32 +92,23 @@ struct VehiclesView: View {
         return result
     }
     
-    // MARK: - Stats
-    
-    private var totalCount: Int { vehicles.count }
-    private var svaCount: Int { vehicles.filter { $0.type.uppercased() == "SVA" }.count }
-    private var svbCount: Int { vehicles.filter { $0.type.uppercased() == "SVB" }.count }
-    private var withBaseCount: Int { vehicles.filter { $0.hasBase }.count }
-    private var withKitsCount: Int { vehicles.filter { $0.hasKits }.count }
-    
     // MARK: - Body
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 if isLoading {
-                    loadingView
+                    VehiclesLoadingView()
                 } else if vehicles.isEmpty {
-                    emptyView
+                    VehiclesEmptyView()
                 } else {
-                    // Stats header
-                    statsHeader
-                    
-                    // Filtros
-                    filterMenu
-                    
-                    // Lista
-                    vehiclesList
+                    VehiclesStatsHeader(stats: stats)
+                    VehiclesFilterMenu(selectedFilter: $selectedFilter)
+                    VehiclesListView(
+                        filteredVehicles: filteredVehicles,
+                        currentUser: currentUser,
+                        bases: bases
+                    )
                 }
             }
             .navigationTitle("Vehículos")
@@ -129,51 +121,61 @@ struct VehiclesView: View {
             await loadData()
         }
     }
-    
-    // MARK: - Subviews
-
-    private var loadingView: some View {
-        VehiclesLoadingView()
-    }
-
-    private var emptyView: some View {
-        VehiclesEmptyView()
-    }
-
-    private var statsHeader: some View {
-        VehiclesStatsHeader(
-            totalCount: totalCount,
-            svaCount: svaCount,
-            svbCount: svbCount,
-            withBaseCount: withBaseCount,
-            withKitsCount: withKitsCount
-        )
-    }
-
-    private var filterMenu: some View {
-        VehiclesFilterMenu(selectedFilter: $selectedFilter)
-    }
-
-    private var vehiclesList: some View {
-        VehiclesListView(
-            filteredVehicles: filteredVehicles,
-            currentUser: currentUser,
-            bases: bases
-        )
-    }
 
     // MARK: - Load Data
     
     private func loadData() async {
         isLoading = true
-        
+
         async let vehiclesTask = VehicleService.shared.getAllVehicles()
         async let basesTask = BaseService.shared.getAllBases()
-        
-        vehicles = await vehiclesTask
+
+        let loadedVehicles = await vehiclesTask
+        vehicles = loadedVehicles
         bases = await basesTask
-        
+        stats = VehicleStats(vehicles: loadedVehicles)
+
         isLoading = false
+    }
+}
+
+// MARK: - VehicleStats
+
+struct VehicleStats: Equatable {
+    let totalCount: Int
+    let svaCount: Int
+    let svbCount: Int
+    let withBaseCount: Int
+    let withKitsCount: Int
+
+    static let empty = VehicleStats(totalCount: 0, svaCount: 0, svbCount: 0, withBaseCount: 0, withKitsCount: 0)
+
+    init(totalCount: Int, svaCount: Int, svbCount: Int, withBaseCount: Int, withKitsCount: Int) {
+        self.totalCount = totalCount
+        self.svaCount = svaCount
+        self.svbCount = svbCount
+        self.withBaseCount = withBaseCount
+        self.withKitsCount = withKitsCount
+    }
+
+    init(vehicles: [VehicleFS]) {
+        var sva = 0, svb = 0, withBase = 0, withKits = 0
+        for vehicle in vehicles {
+            switch vehicle.type.uppercased() {
+            case "SVA": sva += 1
+            case "SVB": svb += 1
+            default: break
+            }
+            if vehicle.hasBase { withBase += 1 }
+            if vehicle.hasKits { withKits += 1 }
+        }
+        self.init(
+            totalCount: vehicles.count,
+            svaCount: sva,
+            svbCount: svb,
+            withBaseCount: withBase,
+            withKitsCount: withKits
+        )
     }
 }
 
@@ -206,20 +208,16 @@ private struct VehiclesEmptyView: View {
 // MARK: - VehiclesStatsHeader
 
 private struct VehiclesStatsHeader: View {
-    let totalCount: Int
-    let svaCount: Int
-    let svbCount: Int
-    let withBaseCount: Int
-    let withKitsCount: Int
+    let stats: VehicleStats
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 12) {
-                VehicleStatBadge(count: totalCount, title: "Total",    color: .blue,   icon: "car.2.fill")
-                VehicleStatBadge(count: svaCount,   title: "SVA",     color: .red,    icon: "cross.case.fill")
-                VehicleStatBadge(count: svbCount,   title: "SVB",     color: .blue,   icon: "shippingbox.fill")
-                VehicleStatBadge(count: withBaseCount, title: "Con Base", color: .green, icon: "building.fill")
-                VehicleStatBadge(count: withKitsCount, title: "Con Kits", color: .purple, icon: "shippingbox.fill")
+                VehicleStatBadge(count: stats.totalCount,    title: "Total",    color: .blue,   icon: "car.2.fill")
+                VehicleStatBadge(count: stats.svaCount,      title: "SVA",      color: .red,    icon: "cross.case.fill")
+                VehicleStatBadge(count: stats.svbCount,      title: "SVB",      color: .blue,   icon: "shippingbox.fill")
+                VehicleStatBadge(count: stats.withBaseCount, title: "Con Base", color: .green,  icon: "building.fill")
+                VehicleStatBadge(count: stats.withKitsCount, title: "Con Kits", color: .purple, icon: "shippingbox.fill")
             }
             .padding(.horizontal)
             .padding(.vertical, 12)

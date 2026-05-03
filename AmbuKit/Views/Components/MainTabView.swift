@@ -39,34 +39,24 @@ struct MainTabView: View {
     var body: some View {
         Group {
             if isLoading {
-                loadingView
+                MainTabLoadingView()
             } else {
-                mainTabView
+                MainTabContentView(
+                    userForViews: userForViews,
+                    showAdminTab: showAdminTab,
+                    selectedTab: $selectedTab,
+                    alertCount: alertCount
+                )
+                .task {
+                    await loadAlertCount()
+                }
             }
         }
         .task {
             await loadInitialData()
         }
     }
-    
-    // MARK: - Subviews
 
-    private var loadingView: some View {
-        MainTabLoadingView()
-    }
-
-    private var mainTabView: some View {
-        MainTabContentView(
-            userForViews: userForViews,
-            showAdminTab: showAdminTab,
-            selectedTab: $selectedTab,
-            alertCount: alertCount
-        )
-        .task {
-            await loadAlertCount()
-        }
-    }
-    
     // MARK: - Load Data
     
     private func loadInitialData() async {

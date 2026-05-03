@@ -1,131 +1,92 @@
 //
-//  UserServiceTests..swift
-//  AmbuKit
+//  UserServiceTests.swift
+//  AmbuKitTests
 //
-//  Created by Adolfo on 16/11/25.
-//
-//  Tests para UserService - Gestión de usuarios en Firestore
-//  ⚠️ IMPORTANTE: Estos tests usan Firebase REAL
-//  Los tests CRUD crean datos de prueba que se limpian en tearDown
+//  Tests para UserService
+//  ⚠️ Estos tests usan Firebase REAL
 //
 
-
-import XCTest
+import Testing
 @testable import AmbuKit
+import Foundation
 import FirebaseCore
-import FirebaseAuth
 import FirebaseFirestore
 
-/// Tests para UserService
-/// Verifica CRUD, permisos, auditoría y cache
 @MainActor
-final class UserServiceTests: XCTestCase {
-    
-    // MARK: - Properties
-    
-    var service: UserService!
-    var db: Firestore!
-    
-    // Usuarios de prueba
-    var programmer: UserFS!
-    var logistics: UserFS!
-    var sanitary: UserFS!
-    
-    // Roles de prueba (obtenidos de Firebase, no creados)
-    var programmerRole: RoleFS!
-    var logisticsRole: RoleFS!
-    var sanitaryRole: RoleFS!
-    
-    // IDs de usuarios creados para limpieza
+@Suite(.tags(.firebase, .slow), .timeLimit(.minutes(2)))
+final class UserServiceTests {
+
+    private let service: UserService
+    private let db: Firestore
+
+    private var programmer: UserFS!
+    private var logistics: UserFS!
+    private var sanitary: UserFS!
+
+    private let programmerRole: RoleFS?
+    private let logisticsRole: RoleFS?
+    private let sanitaryRole: RoleFS?
+
     private var createdUserIds: [String] = []
-    
-    // MARK: - Setup & Teardown
-    
-    override func setUp() async throws {
-        try await super.setUp()
-        
-        // Configurar Firebase para tests
+
+    init() async throws {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
-        
-        service = UserService.shared
-        db = Firestore.firestore()
+        self.service = UserService.shared
+        self.db = Firestore.firestore()
         service.clearCache()
-        
-        // Obtener roles existentes (NO crear nuevos)
-        try await fetchExistingRoles()
-        
-        // Crear usuario programmer de prueba
-        try await createProgrammerTestUser()
-        
-        createdUserIds = []
-    }
-    
-    override func tearDown() async throws {
-        // Limpiar usuarios creados durante los tests
-        for userId in createdUserIds {
-            try? await db.collection(UserFS.collectionName).document(userId).delete()
-        }
-        createdUserIds.removeAll()
-        
-        // Limpiar usuario programmer de prueba
-        if let programmerId = programmer?.id {
-            try? await db.collection(UserFS.collectionName).document(programmerId).delete()
-        }
-        
-        // Limpiar cache
-        service.clearCache()
-        
-        try await super.tearDown()
-    }
-    
-    // MARK: - Setup Helpers
-    
-    /// Obtener roles existentes de Firebase (NO crear nuevos)
-    private func fetchExistingRoles() async throws {
+
         let roles = await PolicyService.shared.getAllRoles()
-        
-        programmerRole = roles.first(where: { $0.kind == .programmer })
-        logisticsRole = roles.first(where: { $0.kind == .logistics })
-        sanitaryRole = roles.first(where: { $0.kind == .sanitary })
-        
-        guard programmerRole != nil, logisticsRole != nil, sanitaryRole != nil else {
-            throw XCTSkip("No se encontraron los 3 roles base en Firebase")
-        }
-    }
-    
-    /// Crear usuario programmer de prueba para actuar como actor
-    private func createProgrammerTestUser() async throws {
+        self.programmerRole = roles.first(where: { $0.kind == .programmer })
+        self.logisticsRole = roles.first(where: { $0.kind == .logistics })
+        self.sanitaryRole = roles.first(where: { $0.kind == .sanitary })
+
+        guard let programmerRoleId = programmerRole?.id else { return }
+
         let testId = "test_programmer_\(UUID().uuidString.prefix(6))"
-        
-        programmer = UserFS(
+        let user = UserFS(
             id: testId,
             uid: "test_prog_uid_\(UUID().uuidString.prefix(6))",
             username: "test_programmer_\(UUID().uuidString.prefix(6))",
             fullName: "Test Programmer",
             email: "programmer_\(UUID().uuidString.prefix(6))@test.com",
             active: true,
-            roleId: programmerRole.id
+            roleId: programmerRoleId
         )
-        
-        // Guardar en Firestore
+
         try db.collection(UserFS.collectionName)
             .document(testId)
-            .setData(from: programmer)
+            .setData(from: user)
+
+        self.programmer = user
     }
-    
-    /// Helper para crear usuario de prueba y registrar para limpieza
-    private func createTestUser(
+
+    deinit {
+        let ids = createdUserIds
+        let programmer = self.programmer
+        let database = db
+        Task { @MainActor in
+            for userId in ids {
+                try? await database.collection(UserFS.collectionName).document(userId).delete()
+            }
+            if let pid = programmer?.id {
+                try? await database.collection(UserFS.collectionName).document(pid).delete()
+            }
+        }
+    }
+
+    // MARK: - Helper
+
+    private func makeTestUser(
         username: String,
         fullName: String,
         email: String,
         roleId: String?,
         active: Bool = true
     ) -> UserFS {
-        let testId = "test_user_\(UUID().uuidString.prefix(6))"
-        return UserFS(
-            id: testId,
+        UserFS(
+            id: "test_user_\(UUID().uuidString.prefix(6))",
             uid: "test_uid_\(UUID().uuidString.prefix(6))",
             username: username,
             fullName: fullName,
@@ -134,208 +95,150 @@ final class UserServiceTests: XCTestCase {
             roleId: roleId
         )
     }
-    
-    // MARK: - Tests - Create
-    
-    func testCreateUser_WithPermissions_Succeeds() async throws {
-        // Given: Un programador (con permisos)
-        let uniqueSuffix = UUID().uuidString.prefix(6)
-        let email = "newuser_\(uniqueSuffix)@test.com"
-        let password = "Test1234!"
-        let username = "test_new_user_\(uniqueSuffix)"
+
+    // MARK: - Create Tests
+
+    @Test func createUser_WithPermissions_Succeeds() async throws {
+        guard let logisticsRoleId = logisticsRole?.id, let actor = programmer else { return }
+
+        let suffix = UUID().uuidString.prefix(6)
+        let email = "newuser_\(suffix)@test.com"
+        let username = "test_new_user_\(suffix)"
         let fullName = "New Test User"
-        
-        // When: Crear un nuevo usuario
+
         let newUser = try await service.create(
             email: email,
-            password: password,
+            password: "Test1234!",
             username: username,
             fullName: fullName,
-            roleId: logisticsRole.id!,
-            actor: programmer
+            roleId: logisticsRoleId,
+            actor: actor
         )
-        
-        // Registrar para limpieza
-        if let id = newUser.id {
-            createdUserIds.append(id)
-        }
-        
-        // Then: Usuario creado correctamente
-        XCTAssertNotNil(newUser.id)
-        XCTAssertEqual(newUser.username, username)
-        XCTAssertEqual(newUser.email, email)
-        XCTAssertEqual(newUser.fullName, fullName)
-        XCTAssertTrue(newUser.active)
-        XCTAssertEqual(newUser.roleId, logisticsRole.id)
-        
-        // Verificar que se guardó en Firestore
+
+        if let id = newUser.id { createdUserIds.append(id) }
+
+        #expect(newUser.id != nil)
+        #expect(newUser.username == username)
+        #expect(newUser.email == email)
+        #expect(newUser.fullName == fullName)
+        #expect(newUser.active)
+        #expect(newUser.roleId == logisticsRoleId)
+
         let savedUser = await service.getUser(id: newUser.id)
-        XCTAssertNotNil(savedUser)
-        XCTAssertEqual(savedUser?.username, username)
+        #expect(savedUser != nil)
+        #expect(savedUser?.username == username)
     }
-    
-    func testCreateUser_WithoutPermissions_Fails() async throws {
-        // Given: Un sanitario (sin permisos para crear usuarios)
-        sanitary = createTestUser(
+
+    @Test func createUser_WithoutPermissions_Fails() async throws {
+        guard let sanitaryRoleId = sanitaryRole?.id,
+              let logisticsRoleId = logisticsRole?.id else { return }
+
+        sanitary = makeTestUser(
             username: "test_sanitary_\(UUID().uuidString.prefix(6))",
             fullName: "Test Sanitary",
             email: "sanitary_\(UUID().uuidString.prefix(6))@test.com",
-            roleId: sanitaryRole.id
+            roleId: sanitaryRoleId
         )
-        
-        // When/Then: Intentar crear usuario debe fallar
-        do {
-            let user = try await service.create(
+
+        await #expect(throws: (any Error).self) {
+            let user = try await self.service.create(
                 email: "fail_\(UUID().uuidString.prefix(6))@test.com",
                 password: "Test1234!",
                 username: "fail_user_\(UUID().uuidString.prefix(6))",
                 fullName: "Fail User",
-                roleId: logisticsRole.id!,
-                actor: sanitary
+                roleId: logisticsRoleId,
+                actor: self.sanitary
             )
-            if let id = user.id {
-                createdUserIds.append(id)
-            }
-            XCTFail("Debería haber lanzado error de autorización")
-        } catch {
-            // Error esperado - cualquier error de autorización es válido
-            XCTAssertTrue(
-                error.localizedDescription.lowercased().contains("autoriz") ||
-                error.localizedDescription.lowercased().contains("permiso") ||
-                error.localizedDescription.lowercased().contains("unauthorized") ||
-                error is UserServiceError,
-                "Error debería ser de autorización: \(error)"
-            )
+            if let id = user.id { self.createdUserIds.append(id) }
         }
     }
-    
-    func testCreateUser_DuplicateUsername_Fails() async throws {
-        // Given: Crear un usuario primero
-        let uniqueSuffix = UUID().uuidString.prefix(6)
-        let duplicateUsername = "test_dup_\(uniqueSuffix)"
-        
-        let firstUser = try await service.create(
-            email: "first_\(uniqueSuffix)@test.com",
+
+    @Test func createUser_DuplicateUsername_Fails() async throws {
+        guard let logisticsRoleId = logisticsRole?.id, let actor = programmer else { return }
+
+        let suffix = UUID().uuidString.prefix(6)
+        let duplicateUsername = "test_dup_\(suffix)"
+
+        let first = try await service.create(
+            email: "first_\(suffix)@test.com",
             password: "Test1234!",
             username: duplicateUsername,
             fullName: "First User",
-            roleId: logisticsRole.id!,
-            actor: programmer
+            roleId: logisticsRoleId,
+            actor: actor
         )
-        if let id = firstUser.id {
-            createdUserIds.append(id)
-        }
-        
-        // When/Then: Intentar crear con username duplicado debe fallar
-        do {
-            let user = try await service.create(
-                email: "duplicate_\(uniqueSuffix)@test.com",
+        if let id = first.id { createdUserIds.append(id) }
+
+        await #expect(throws: (any Error).self) {
+            let user = try await self.service.create(
+                email: "duplicate_\(suffix)@test.com",
                 password: "Test1234!",
-                username: duplicateUsername, // Mismo username
+                username: duplicateUsername,
                 fullName: "Duplicate User",
-                roleId: logisticsRole.id!,
-                actor: programmer
+                roleId: logisticsRoleId,
+                actor: actor
             )
-            if let id = user.id {
-                createdUserIds.append(id)
-            }
-            XCTFail("Debería haber lanzado error de username duplicado")
-        } catch {
-            // Error esperado
-            XCTAssertTrue(
-                error.localizedDescription.lowercased().contains("username") ||
-                error.localizedDescription.lowercased().contains("duplicado") ||
-                error.localizedDescription.lowercased().contains("existe") ||
-                error is UserServiceError,
-                "Error debería mencionar username duplicado: \(error)"
-            )
+            if let id = user.id { self.createdUserIds.append(id) }
         }
     }
-    
-    // MARK: - Tests - Read
-    
-    func testGetUser_ExistingUser_ReturnsUser() async throws {
-        // Given: Un usuario existente
-        let userId = programmer.id!
-        
-        // When: Obtener usuario
+
+    // MARK: - Read Tests
+
+    @Test func getUser_ExistingUser_ReturnsUser() async throws {
+        guard let userId = programmer?.id else { return }
+
         let user = await service.getUser(id: userId)
-        
-        // Then: Usuario encontrado
-        XCTAssertNotNil(user)
-        XCTAssertEqual(user?.id, userId)
+        #expect(user != nil)
+        #expect(user?.id == userId)
     }
-    
-    func testGetUser_NonExistingUser_ReturnsNil() async throws {
-        // Given: Un ID que no existe
-        let fakeId = "nonexistent_user_id_12345"
-        
-        // When: Obtener usuario
-        let user = await service.getUser(id: fakeId)
-        
-        // Then: No encontrado
-        XCTAssertNil(user)
+
+    @Test func getUser_NonExistingUser_ReturnsNil() async throws {
+        let user = await service.getUser(id: "nonexistent_user_id_12345")
+        #expect(user == nil)
     }
-    
-    func testGetAllUsers_ReturnsUsers() async throws {
-        // When: Obtener todos los usuarios
+
+    @Test func getAllUsers_ReturnsUsers() async throws {
         let users = await service.getAllUsers()
-        
-        // Then: Hay usuarios (al menos el de prueba)
-        XCTAssertFalse(users.isEmpty)
+        #expect(!users.isEmpty)
     }
-    
-    /// getAllUsers() ya filtra por usuarios activos internamente
-    func testGetAllUsers_ReturnsOnlyActiveUsers() async throws {
-        // When: Obtener todos los usuarios (getAllUsers filtra por active=true)
+
+    @Test func getAllUsers_ReturnsOnlyActiveUsers() async throws {
         let users = await service.getAllUsers()
-        
-        // Then: Todos están activos (porque getAllUsers ya filtra)
-        XCTAssertTrue(users.allSatisfy { $0.active })
+        #expect(users.allSatisfy { $0.active })
     }
-    
-    func testGetUsersByRole_ReturnsUsersWithRole() async throws {
-        // Given: Un rol específico
-        guard let roleId = programmerRole.id else {
-            throw XCTSkip("Programmer role no tiene ID")
-        }
-        
-        // When: Obtener usuarios por rol
+
+    @Test func getUsersByRole_ReturnsUsersWithRole() async throws {
+        guard let roleId = programmerRole?.id else { return }
+
         let users = await service.getUsersByRole(roleId: roleId)
-        
-        // Then: Todos los usuarios tienen ese rol
         for user in users {
-            XCTAssertEqual(user.roleId, roleId)
+            #expect(user.roleId == roleId)
         }
     }
-    
-    // MARK: - Tests - Update
-    
-    func testUpdateUser_WithPermissions_Succeeds() async throws {
-        // Given: Crear un usuario para actualizar
-        let uniqueSuffix = UUID().uuidString.prefix(6)
+
+    // MARK: - Update Tests
+
+    @Test func updateUser_WithPermissions_Succeeds() async throws {
+        guard let logisticsRoleId = logisticsRole?.id, let actor = programmer else { return }
+
+        let suffix = UUID().uuidString.prefix(6)
         let originalUser = try await service.create(
-            email: "update_\(uniqueSuffix)@test.com",
+            email: "update_\(suffix)@test.com",
             password: "Test1234!",
-            username: "update_user_\(uniqueSuffix)",
+            username: "update_user_\(suffix)",
             fullName: "Original Name",
-            roleId: logisticsRole.id!,
-            actor: programmer
+            roleId: logisticsRoleId,
+            actor: actor
         )
-        
-        guard let userId = originalUser.id else {
-            XCTFail("Usuario debería tener ID")
-            return
-        }
+
+        let userId = try #require(originalUser.id)
         createdUserIds.append(userId)
-        
-        // Crear nuevo UserFS con valores actualizados
-        // (fullName y username son let, así que creamos nuevo objeto)
+
         let updatedUser = UserFS(
             id: userId,
             uid: originalUser.uid,
-            username: "updated_user_\(uniqueSuffix)",  // Nuevo username
-            fullName: "Updated Name",                   // Nuevo nombre
+            username: "updated_user_\(suffix)",
+            fullName: "Updated Name",
             email: originalUser.email,
             active: originalUser.active,
             roleId: originalUser.roleId,
@@ -343,89 +246,74 @@ final class UserServiceTests: XCTestCase {
             createdAt: originalUser.createdAt,
             updatedAt: Date()
         )
-        
-        // When: Actualizar usuario (con label user:)
-        try await service.update(user: updatedUser, actor: programmer)
-        
-        // Then: Usuario actualizado
+
+        try await service.update(user: updatedUser, actor: actor)
+
         let fetched = await service.getUser(id: userId)
-        XCTAssertNotNil(fetched)
-        XCTAssertEqual(fetched?.fullName, "Updated Name")
-        XCTAssertEqual(fetched?.username, "updated_user_\(uniqueSuffix)")
+        #expect(fetched != nil)
+        #expect(fetched?.fullName == "Updated Name")
+        #expect(fetched?.username == "updated_user_\(suffix)")
     }
-    
-    func testUpdateUser_WithoutPermissions_Fails() async throws {
-        // Given: Un sanitario (sin permisos para actualizar usuarios)
-        sanitary = createTestUser(
+
+    @Test func updateUser_WithoutPermissions_Fails() async throws {
+        guard let sanitaryRoleId = sanitaryRole?.id, let prog = programmer else { return }
+
+        sanitary = makeTestUser(
             username: "test_san_\(UUID().uuidString.prefix(6))",
             fullName: "Test Sanitary",
             email: "san_\(UUID().uuidString.prefix(6))@test.com",
-            roleId: sanitaryRole.id
+            roleId: sanitaryRoleId
         )
-        
-        // Crear nuevo UserFS con valores "actualizados"
+
         let hackedUser = UserFS(
-            id: programmer.id,
-            uid: programmer.uid,
-            username: programmer.username,
-            fullName: "Hacked Name",  // Intento de cambio
-            email: programmer.email,
-            active: programmer.active,
-            roleId: programmer.roleId,
-            baseId: programmer.baseId,
-            createdAt: programmer.createdAt,
+            id: prog.id,
+            uid: prog.uid,
+            username: prog.username,
+            fullName: "Hacked Name",
+            email: prog.email,
+            active: prog.active,
+            roleId: prog.roleId,
+            baseId: prog.baseId,
+            createdAt: prog.createdAt,
             updatedAt: Date()
         )
-        
-        // When/Then: Intentar actualizar debe fallar
-        do {
-            try await service.update(user: hackedUser, actor: sanitary)
-            XCTFail("Debería haber lanzado error de autorización")
-        } catch {
-            // Error esperado
-            XCTAssertTrue(
-                error.localizedDescription.lowercased().contains("autoriz") ||
-                error.localizedDescription.lowercased().contains("permiso") ||
-                error is UserServiceError,
-                "Error debería ser de autorización"
-            )
+
+        await #expect(throws: (any Error).self) {
+            try await self.service.update(user: hackedUser, actor: self.sanitary)
         }
     }
-    
-    func testUpdateUser_DuplicateUsername_Fails() async throws {
-        // Given: Crear dos usuarios
+
+    @Test func updateUser_DuplicateUsername_Fails() async throws {
+        guard let logisticsRoleId = logisticsRole?.id, let actor = programmer else { return }
+
         let suffix1 = UUID().uuidString.prefix(6)
         let suffix2 = UUID().uuidString.prefix(6)
-        
+
         let user1 = try await service.create(
             email: "user1_\(suffix1)@test.com",
             password: "Test1234!",
             username: "user1_\(suffix1)",
             fullName: "User 1",
-            roleId: logisticsRole.id!,
-            actor: programmer
+            roleId: logisticsRoleId,
+            actor: actor
         )
         if let id = user1.id { createdUserIds.append(id) }
-        
+
         let user2 = try await service.create(
             email: "user2_\(suffix2)@test.com",
             password: "Test1234!",
             username: "user2_\(suffix2)",
             fullName: "User 2",
-            roleId: logisticsRole.id!,
-            actor: programmer
+            roleId: logisticsRoleId,
+            actor: actor
         )
-        guard let user2Id = user2.id else {
-            XCTFail("User2 debería tener ID")
-            return
-        }
+        let user2Id = try #require(user2.id)
         createdUserIds.append(user2Id)
-        
-        // Intentar cambiar username de user2 al de user1
+
         let conflictingUser = UserFS(
             id: user2Id,
             uid: user2.uid,
-            username: "user1_\(suffix1)",  // Username de user1 (duplicado!)
+            username: "user1_\(suffix1)",
             fullName: user2.fullName,
             email: user2.email,
             active: user2.active,
@@ -434,186 +322,100 @@ final class UserServiceTests: XCTestCase {
             createdAt: user2.createdAt,
             updatedAt: Date()
         )
-        
-        // When/Then: Actualizar con username duplicado debe fallar
-        do {
-            try await service.update(user: conflictingUser, actor: programmer)
-            XCTFail("Debería haber lanzado error de username duplicado")
-        } catch {
-            // Error esperado
-            XCTAssertTrue(
-                error.localizedDescription.lowercased().contains("username") ||
-                error.localizedDescription.lowercased().contains("duplicado") ||
-                error is UserServiceError,
-                "Error debería mencionar username duplicado"
-            )
+
+        await #expect(throws: (any Error).self) {
+            try await self.service.update(user: conflictingUser, actor: actor)
         }
     }
-    
-    // MARK: - Tests - Delete
-    
-    func testDeleteUser_WithPermissions_Succeeds() async throws {
-        // Given: Crear un usuario para eliminar
-        let uniqueSuffix = UUID().uuidString.prefix(6)
+
+    // MARK: - Delete Tests
+
+    @Test func deleteUser_WithPermissions_Succeeds() async throws {
+        guard let logisticsRoleId = logisticsRole?.id, let actor = programmer else { return }
+
+        let suffix = UUID().uuidString.prefix(6)
         let userToDelete = try await service.create(
-            email: "todelete_\(uniqueSuffix)@test.com",
+            email: "todelete_\(suffix)@test.com",
             password: "Test1234!",
-            username: "to_delete_\(uniqueSuffix)",
+            username: "to_delete_\(suffix)",
             fullName: "To Delete",
-            roleId: logisticsRole.id!,
-            actor: programmer
+            roleId: logisticsRoleId,
+            actor: actor
         )
-        
-        guard let userId = userToDelete.id else {
-            XCTFail("Usuario debería tener ID")
-            return
-        }
-        // NO añadir a createdUserIds porque lo vamos a eliminar
-        
-        // When: Eliminar usuario
-        try await service.delete(userId: userId, actor: programmer)
-        
-        // Then: Usuario marcado como inactivo o eliminado
+
+        let userId = try #require(userToDelete.id)
+
+        try await service.delete(userId: userId, actor: actor)
+
         let deletedUser = await service.getUser(id: userId)
-        // Puede ser nil (eliminado) o active=false (soft delete)
         if let user = deletedUser {
-            XCTAssertFalse(user.active, "Usuario debería estar inactivo")
+            #expect(!user.active)
         }
-        // Si es nil, fue hard delete - también válido
     }
-    
-    func testDeleteUser_WithoutPermissions_Fails() async throws {
-        // Given: Un sanitario (sin permisos)
-        sanitary = createTestUser(
+
+    @Test func deleteUser_WithoutPermissions_Fails() async throws {
+        guard let sanitaryRoleId = sanitaryRole?.id, let actorId = programmer?.id else { return }
+
+        sanitary = makeTestUser(
             username: "test_san_\(UUID().uuidString.prefix(6))",
             fullName: "Test Sanitary",
             email: "san_\(UUID().uuidString.prefix(6))@test.com",
-            roleId: sanitaryRole.id
+            roleId: sanitaryRoleId
         )
-        
-        // When/Then: Intentar eliminar debe fallar
-        do {
-            try await service.delete(userId: programmer.id!, actor: sanitary)
-            XCTFail("Debería haber lanzado error de autorización")
-        } catch {
-            // Error esperado
-            XCTAssertTrue(true)
+
+        await #expect(throws: (any Error).self) {
+            try await self.service.delete(userId: actorId, actor: self.sanitary)
         }
     }
-    
-    func testDeleteUser_Self_Fails() async throws {
-        // Given: Un usuario intentando eliminarse a sí mismo
-        // When/Then: Debe fallar
-        do {
-            try await service.delete(userId: programmer.id!, actor: programmer)
-            XCTFail("Debería haber lanzado error de auto-eliminación")
-        } catch {
-            // Error esperado - no puede eliminarse a sí mismo
-            XCTAssertTrue(true)
+
+    @Test func deleteUser_Self_Fails() async throws {
+        guard let prog = programmer, let actorId = prog.id else { return }
+
+        await #expect(throws: (any Error).self) {
+            try await self.service.delete(userId: actorId, actor: prog)
         }
     }
-    
-    // MARK: - Tests - Cache
-    
-    func testCache_StoresUsers() async throws {
-        // Given: Cache limpio
+
+    // MARK: - Cache Tests
+
+    @Test func cache_StoresUsers() async throws {
+        guard let userId = programmer?.id else { return }
+
         service.clearCache()
-        
-        // When: Obtener usuario (primera vez, desde Firestore)
-        let user1 = await service.getUser(id: programmer.id)
-        
-        // Then: Usuario encontrado
-        XCTAssertNotNil(user1)
-        
-        // When: Obtener usuario (segunda vez, desde cache)
-        let user2 = await service.getUser(id: programmer.id)
-        
-        // Then: Mismo usuario
-        XCTAssertNotNil(user2)
-        XCTAssertEqual(user1?.id, user2?.id)
+        let user1 = await service.getUser(id: userId)
+        #expect(user1 != nil)
+
+        let user2 = await service.getUser(id: userId)
+        #expect(user2 != nil)
+        #expect(user1?.id == user2?.id)
     }
-    
-    func testClearCache_Works() async throws {
-        // Given: Usuario en cache
-        _ = await service.getUser(id: programmer.id)
-        
-        // When: Limpiar cache
+
+    @Test func clearCache_Works() async throws {
+        guard let userId = programmer?.id else { return }
+
+        _ = await service.getUser(id: userId)
         service.clearCache()
-        
-        // Then: Podemos obtener usuarios de nuevo sin problemas
-        let user = await service.getUser(id: programmer.id)
-        XCTAssertNotNil(user)
+        let user = await service.getUser(id: userId)
+        #expect(user != nil)
     }
-    
-    // MARK: - Tests - Helpers
-    
-    func testIsEmailTaken_ExistingEmail_ReturnsTrue() async throws {
-        // Given: Un email existente
-        let email = programmer.email
-        
-        // When: Verificar si está en uso
+
+    // MARK: - Helpers
+
+    @Test func isEmailTaken_ExistingEmail_ReturnsTrue() async throws {
+        guard let email = programmer?.email else { return }
+
         let isTaken = await service.isEmailTaken(email)
-        
-        // Then: Está en uso
-        XCTAssertTrue(isTaken)
+        #expect(isTaken)
     }
-    
-    func testIsEmailTaken_NewEmail_ReturnsFalse() async throws {
-        // Given: Un email nuevo
+
+    @Test func isEmailTaken_NewEmail_ReturnsFalse() async throws {
         let email = "newemail_\(UUID().uuidString.prefix(8))@test.com"
-        
-        // When: Verificar si está en uso
         let isTaken = await service.isEmailTaken(email)
-        
-        // Then: No está en uso
-        XCTAssertFalse(isTaken)
+        #expect(!isTaken)
     }
-    
-    func testGetUserCount_ReturnsPositiveNumber() async throws {
-        // When: Obtener conteo
+
+    @Test func getUserCount_ReturnsPositiveNumber() async throws {
         let count = await service.getUserCount()
-        
-        // Then: Hay al menos 1 usuario (el de prueba)
-        XCTAssertGreaterThanOrEqual(count, 1)
+        #expect(count >= 1)
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

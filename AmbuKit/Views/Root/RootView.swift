@@ -28,16 +28,12 @@ struct RootView: View {
     var body: some View {
         Group {
             if !isInitialized {
-                // Estado 1: Splash mientras inicializa
-                splashScreen
+                RootSplashView()
             } else if appState.isLoadingUser {
-                // Estado 2: Cargando usuario de Firestore
-                loadingScreen
+                RootLoadingView()
             } else if appState.isAuthenticated, let user = appState.currentUser {
-                // Estado 3: Autenticado → MainTabScreen (Firebase)
                 MainTabView(currentUser: user)
             } else {
-                // Estado 4: No autenticado → Login
                 LoginView()
             }
         }
@@ -46,16 +42,6 @@ struct RootView: View {
         .task {
             await initialize()
         }
-    }
-    
-    // MARK: - Subviews
-
-    private var splashScreen: some View {
-        RootSplashView()
-    }
-
-    private var loadingScreen: some View {
-        RootLoadingView()
     }
 
     // MARK: - Initialization

@@ -48,11 +48,23 @@ struct KitDetailView: View {
     var body: some View {
         Group {
             if isLoading {
-                loadingView
+                KitDetailLoadingView()
             } else if items.isEmpty {
-                emptyStateView
+                KitDetailEmptyStateView()
             } else {
-                contentView
+                KitDetailContentView(
+                    items: items,
+                    catalogDict: catalogDict,
+                    kit: kit,
+                    currentUser: currentUser,
+                    canUpdateStock: canUpdateStock,
+                    updatingItemId: updatingItemId,
+                    showAuditSheet: $showAuditSheet,
+                    onItemQuantityChange: { item, newQuantity in
+                        await updateItemQuantity(item: item, newQuantity: newQuantity)
+                    },
+                    onRefresh: { await loadData() }
+                )
             }
         }
         .navigationTitle(kit.name)
@@ -79,10 +91,8 @@ struct KitDetailView: View {
     private var toolbarContent: some ToolbarContent {
         // Botón refresh
         ToolbarItem(placement: .primaryAction) {
-            Button {
+            Button("Actualizar", systemImage: "arrow.clockwise") {
                 Task { await loadData() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
             }
         }
         
@@ -98,32 +108,6 @@ struct KitDetailView: View {
         }
     }
     
-    // MARK: - Subviews
-
-    private var loadingView: some View {
-        KitDetailLoadingView()
-    }
-
-    private var emptyStateView: some View {
-        KitDetailEmptyStateView()
-    }
-
-    private var contentView: some View {
-        KitDetailContentView(
-            items: items,
-            catalogDict: catalogDict,
-            kit: kit,
-            currentUser: currentUser,
-            canUpdateStock: canUpdateStock,
-            updatingItemId: updatingItemId,
-            showAuditSheet: $showAuditSheet,
-            onItemQuantityChange: { item, newQuantity in
-                await updateItemQuantity(item: item, newQuantity: newQuantity)
-            },
-            onRefresh: { await loadData() }
-        )
-    }
-
     // MARK: - Load Data
     
     private func loadData() async {
@@ -221,22 +205,28 @@ private struct KitDetailContentView: View {
 
     var body: some View {
         List {
-            // Sección: Info del kit
-            kitInfoSection
-
-            // Sección: Estadísticas rápidas
-            statsSection
-
-            // Sección: Items del kit
-            itemsSection
+            KitInfoSection(kit: kit, showAuditSheet: $showAuditSheet)
+            KitStatsSection(items: items)
+            KitItemsSection(
+                items: items,
+                catalogDict: catalogDict,
+                canUpdateStock: canUpdateStock,
+                updatingItemId: updatingItemId,
+                onItemQuantityChange: onItemQuantityChange
+            )
         }
         .listStyle(.insetGrouped)
         .refreshable {
             await onRefresh()
         }
     }
+}
 
-    // MARK: - Status Color
+// MARK: - KitInfoSection
+
+private struct KitInfoSection: View {
+    let kit: KitFS
+    @Binding var showAuditSheet: Bool
 
     private var statusColor: Color {
         switch kit.status {
@@ -247,11 +237,8 @@ private struct KitDetailContentView: View {
         }
     }
 
-    // MARK: - Kit Info Section
-
-    private var kitInfoSection: some View {
+    var body: some View {
         Section {
-            // Código
             HStack {
                 Label("Código", systemImage: "number")
                 Spacer()
@@ -259,7 +246,6 @@ private struct KitDetailContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Tipo
             HStack {
                 Label("Tipo", systemImage: kit.kitType.systemImage)
                 Spacer()
@@ -271,7 +257,6 @@ private struct KitDetailContentView: View {
                     .clipShape(Capsule())
             }
 
-            // Estado
             HStack {
                 Label("Estado", systemImage: kit.status.icon)
                 Spacer()
@@ -283,7 +268,6 @@ private struct KitDetailContentView: View {
                     .clipShape(Capsule())
             }
 
-            // Última auditoría - CLICKEABLE
             Button {
                 showAuditSheet = true
             } label: {
@@ -306,7 +290,6 @@ private struct KitDetailContentView: View {
             }
             .buttonStyle(.plain)
 
-            // Asignación
             HStack {
                 Label("Vehículo", systemImage: "car.fill")
                 Spacer()
@@ -322,13 +305,16 @@ private struct KitDetailContentView: View {
             Text("Información del Kit")
         }
     }
+}
 
-    // MARK: - Stats Section
+// MARK: - KitStatsSection
 
-    private var statsSection: some View {
+private struct KitStatsSection: View {
+    let items: [KitItemFS]
+
+    var body: some View {
         Section {
             HStack(spacing: 20) {
-                // Total items
                 VStack {
                     Text("\(items.count)")
                         .font(.title2.bold())
@@ -341,9 +327,8 @@ private struct KitDetailContentView: View {
 
                 Divider()
 
-                // Stock bajo
                 VStack {
-                    Text("\(items.filter { $0.isBelowMinimum }.count)")
+                    Text("\(items.count(where: { $0.isBelowMinimum }))")
                         .font(.title2.bold())
                         .foregroundStyle(.orange)
                     Text("Stock Bajo")
@@ -354,9 +339,8 @@ private struct KitDetailContentView: View {
 
                 Divider()
 
-                // Próximos a caducar
                 VStack {
-                    Text("\(items.filter { $0.isExpiringSoon || $0.isExpired }.count)")
+                    Text("\(items.count(where: { $0.isExpiringSoon || $0.isExpired }))")
                         .font(.title2.bold())
                         .foregroundStyle(.red)
                     Text("Caducidad")
@@ -368,10 +352,18 @@ private struct KitDetailContentView: View {
             .padding(.vertical, 8)
         }
     }
+}
 
-    // MARK: - Items Section
+// MARK: - KitItemsSection
 
-    private var itemsSection: some View {
+private struct KitItemsSection: View {
+    let items: [KitItemFS]
+    let catalogDict: [String: CatalogItemFS]
+    let canUpdateStock: Bool
+    let updatingItemId: String?
+    let onItemQuantityChange: (KitItemFS, Double) async -> Void
+
+    var body: some View {
         Section {
             ForEach(items) { item in
                 KitItemRow(

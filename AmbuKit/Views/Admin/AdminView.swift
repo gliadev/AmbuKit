@@ -39,32 +39,22 @@ struct AdminView: View {
     var body: some View {
         Group {
             if isLoading {
-                loadingView
+                AdminLoadingView()
             } else {
-                adminContent
+                AdminContentView(
+                    currentUser: currentUser,
+                    canCreateKits: canCreateKits,
+                    canCreateVehicles: canCreateVehicles,
+                    canCreateBases: canCreateBases,
+                    canEditThresholds: canEditThresholds,
+                    canManageUsers: canManageUsers
+                )
             }
         }
         .navigationTitle("Gestión")
         .task {
             await loadPermissions()
         }
-    }
-
-    // MARK: - Subviews
-
-    private var loadingView: some View {
-        AdminLoadingView()
-    }
-
-    private var adminContent: some View {
-        AdminContentView(
-            currentUser: currentUser,
-            canCreateKits: canCreateKits,
-            canCreateVehicles: canCreateVehicles,
-            canCreateBases: canCreateBases,
-            canEditThresholds: canEditThresholds,
-            canManageUsers: canManageUsers
-        )
     }
 
     // MARK: - Load Permissions
@@ -114,49 +104,54 @@ private struct AdminContentView: View {
 
     var body: some View {
         List {
-            // Header con info del usuario
-            userInfoHeader
+            AdminUserInfoHeader(
+                currentUser: currentUser,
+                permissionCount: [
+                    canCreateKits,
+                    canCreateVehicles,
+                    canCreateBases,
+                    canEditThresholds,
+                    canManageUsers
+                ].count(where: { $0 })
+            )
 
-            // Sección: Crear Kit
             if canCreateKits {
-                createKitSection
+                AdminCreateKitSection(currentUser: currentUser)
             }
 
-            // Sección: Crear Vehículo
             if canCreateVehicles {
-                createVehicleSection
+                AdminCreateVehicleSection(currentUser: currentUser)
             }
 
-            // Sección: Crear Base
             if canCreateBases {
-                createBaseSection
+                AdminCreateBaseSection(currentUser: currentUser)
             }
 
-            // Sección: Editar Umbrales
             if canEditThresholds {
-                thresholdsSection
+                AdminThresholdsSection(currentUser: currentUser)
             }
 
-            // Sección: Gestión de Usuarios
             if canManageUsers {
-                usersSection
+                AdminUsersSection(currentUser: currentUser)
             }
         }
         .listStyle(.insetGrouped)
     }
+}
 
-    // MARK: - Role Color
+// MARK: - AdminUserInfoHeader
+
+private struct AdminUserInfoHeader: View {
+    let currentUser: UserFS
+    let permissionCount: Int
 
     private var roleColor: Color {
         currentUser.role?.kind.color ?? .gray
     }
 
-    // MARK: - User Info Header
-
-    private var userInfoHeader: some View {
+    var body: some View {
         Section {
             HStack(spacing: 16) {
-                // Avatar
                 ZStack {
                     Circle()
                         .fill(roleColor.opacity(0.15))
@@ -167,7 +162,6 @@ private struct AdminContentView: View {
                         .foregroundStyle(roleColor)
                 }
 
-                // Info
                 VStack(alignment: .leading, spacing: 4) {
                     Text(currentUser.fullName)
                         .font(.headline)
@@ -189,302 +183,207 @@ private struct AdminContentView: View {
 
                 Spacer()
 
-                // Permisos badge
                 VStack(alignment: .trailing, spacing: 2) {
-                    let count = [canCreateKits, canCreateVehicles, canCreateBases, canEditThresholds, canManageUsers].count(where: { $0 })
-                    Text("\(count)")
+                    Text("\(permissionCount)")
                         .font(.title2.bold())
                         .foregroundStyle(roleColor)
                     Text("permisos")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
         }
     }
+}
 
-    // MARK: - Create Kit Section
+// MARK: - AdminMenuRow
 
-    private var createKitSection: some View {
-        Section {
-            // Crear Kit
-            NavigationLink {
-                CreateKitScreen(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.blue.opacity(0.15))
-                            .frame(width: 40, height: 40)
+private struct AdminMenuRow<Destination: View>: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    let trailingIcon: String
+    @ViewBuilder let destination: () -> Destination
 
-                        Image(systemName: "cross.case.fill")
-                            .font(.title3)
-                            .foregroundStyle(.blue)
-                    }
+    var body: some View {
+        NavigationLink {
+            destination()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(color.opacity(0.15))
+                        .frame(width: 40, height: 40)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Crear Kit")
-                            .font(.headline)
-                        Text("Añadir nuevo kit al sistema")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.blue)
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundStyle(color)
                 }
-            }
 
-            // ✅ NUEVO: Editar Kits
-            NavigationLink {
-                KitManagementView(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.blue.opacity(0.15))
-                            .frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.blue)
-                    }
+                Spacer()
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Editar Kits")
-                            .font(.headline)
-                        Text("Modificar o eliminar kits")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
+                if trailingIcon == "chevron.right" {
+                    Image(systemName: trailingIcon)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                } else {
+                    Image(systemName: trailingIcon)
+                        .foregroundStyle(color)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - AdminCreateKitSection
+
+private struct AdminCreateKitSection: View {
+    let currentUser: UserFS
+
+    var body: some View {
+        Section {
+            AdminMenuRow(
+                title: "Crear Kit",
+                subtitle: "Añadir nuevo kit al sistema",
+                icon: "cross.case.fill",
+                color: .blue,
+                trailingIcon: "plus.circle.fill"
+            ) {
+                CreateKitScreen(currentUser: currentUser)
+            }
+
+            AdminMenuRow(
+                title: "Editar Kits",
+                subtitle: "Modificar o eliminar kits",
+                icon: "pencil.circle.fill",
+                color: .blue,
+                trailingIcon: "chevron.right"
+            ) {
+                KitManagementView(currentUser: currentUser)
             }
         } header: {
             Label("Kits", systemImage: "shippingbox.fill")
         }
     }
+}
 
-    // MARK: - Create Vehicle Section
+// MARK: - AdminCreateVehicleSection
 
-    private var createVehicleSection: some View {
+private struct AdminCreateVehicleSection: View {
+    let currentUser: UserFS
+
+    var body: some View {
         Section {
-            // Crear Vehículo
-            NavigationLink {
+            AdminMenuRow(
+                title: "Crear Vehículo",
+                subtitle: "Registrar nueva ambulancia",
+                icon: "car.fill",
+                color: .green,
+                trailingIcon: "plus.circle.fill"
+            ) {
                 CreateVehicleScreen(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.green.opacity(0.15))
-                            .frame(width: 40, height: 40)
-
-                        Image(systemName: "car.fill")
-                            .font(.title3)
-                            .foregroundStyle(.green)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Crear Vehículo")
-                            .font(.headline)
-                        Text("Registrar nueva ambulancia")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.green)
-                }
             }
 
-            // ✅ NUEVO: Editar Vehículos
-            NavigationLink {
+            AdminMenuRow(
+                title: "Editar Vehículos",
+                subtitle: "Modificar o eliminar vehículos",
+                icon: "pencil.circle.fill",
+                color: .green,
+                trailingIcon: "chevron.right"
+            ) {
                 VehicleManagementView(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.green.opacity(0.15))
-                            .frame(width: 40, height: 40)
-
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.green)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Editar Vehículos")
-                            .font(.headline)
-                        Text("Modificar o eliminar vehículos")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
             }
         } header: {
             Label("Vehículos", systemImage: "car.2.fill")
         }
     }
+}
 
-    // MARK: - Create Base Section
+// MARK: - AdminCreateBaseSection
 
-    private var createBaseSection: some View {
+private struct AdminCreateBaseSection: View {
+    let currentUser: UserFS
+
+    var body: some View {
         Section {
-            // Crear Base
-            NavigationLink {
+            AdminMenuRow(
+                title: "Crear Base",
+                subtitle: "Añadir nueva estación/sede",
+                icon: "building.2.fill",
+                color: .teal,
+                trailingIcon: "plus.circle.fill"
+            ) {
                 CreateBaseScreen(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.teal.opacity(0.15))
-                            .frame(width: 40, height: 40)
-
-                        Image(systemName: "building.2.fill")
-                            .font(.title3)
-                            .foregroundStyle(.teal)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Crear Base")
-                            .font(.headline)
-                        Text("Añadir nueva estación/sede")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.teal)
-                }
             }
 
-            // ✅ NUEVO: Editar Bases
-            NavigationLink {
+            AdminMenuRow(
+                title: "Editar Bases",
+                subtitle: "Modificar o eliminar bases",
+                icon: "pencil.circle.fill",
+                color: .teal,
+                trailingIcon: "chevron.right"
+            ) {
                 BaseManagementView(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.teal.opacity(0.15))
-                            .frame(width: 40, height: 40)
-
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.teal)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Editar Bases")
-                            .font(.headline)
-                        Text("Modificar o eliminar bases")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
             }
         } header: {
             Label("Bases", systemImage: "building.fill")
         }
     }
+}
 
-    // MARK: - Thresholds Section
+// MARK: - AdminThresholdsSection
 
-    private var thresholdsSection: some View {
+private struct AdminThresholdsSection: View {
+    let currentUser: UserFS
+
+    var body: some View {
         Section {
-            NavigationLink {
+            AdminMenuRow(
+                title: "Editar Umbrales",
+                subtitle: "Configurar mín/máx de items",
+                icon: "slider.horizontal.3",
+                color: .orange,
+                trailingIcon: "chevron.right"
+            ) {
                 ThresholdsListScreen(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.orange.opacity(0.15))
-                            .frame(width: 40, height: 40)
-
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.title3)
-                            .foregroundStyle(.orange)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Editar Umbrales")
-                            .font(.headline)
-                        Text("Configurar mín/máx de items")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
-                }
             }
         } header: {
             Label("Configuración", systemImage: "gearshape.fill")
         }
     }
+}
 
-    // MARK: - Users Section
+// MARK: - AdminUsersSection
 
-    private var usersSection: some View {
+private struct AdminUsersSection: View {
+    let currentUser: UserFS
+
+    var body: some View {
         Section {
-            NavigationLink {
+            AdminMenuRow(
+                title: "Gestión de Usuarios",
+                subtitle: "Crear, editar y eliminar usuarios",
+                icon: "person.2.fill",
+                color: .purple,
+                trailingIcon: "chevron.right"
+            ) {
                 UserManagementView(currentUser: currentUser)
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.purple.opacity(0.15))
-                            .frame(width: 40, height: 40)
-
-                        Image(systemName: "person.2.fill")
-                            .font(.title3)
-                            .foregroundStyle(.purple)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Gestión de Usuarios")
-                            .font(.headline)
-                        Text("Crear, editar y eliminar usuarios")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
-                }
             }
         } header: {
             Label("Usuarios", systemImage: "person.fill")
         } footer: {
             Text("Solo disponible para Programadores")
-                .font(.caption2)
+                .font(.caption)
         }
     }
 }

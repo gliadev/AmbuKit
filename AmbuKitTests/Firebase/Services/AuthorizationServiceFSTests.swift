@@ -1,170 +1,126 @@
 //
 //  AuthorizationServiceFSTests.swift
-//  AmbuKit
-//
-//  Created by Adolfo on 15/11/25.
-//  CAMBIOS:
-//  - testCanCreateKitsHelper: Logística ahora SÍ puede crear kits
-//  - testCanCreateVehiclesHelper: NUEVO test para crear vehículos
-//  - testLogisticsCanCreateKits: NUEVO - verifica que Logística puede crear kits
-//  - testLogisticsCanCreateVehicles: NUEVO - verifica que Logística puede crear vehículos
+//  AmbuKitTests
 //
 
-import XCTest
+import Testing
 @testable import AmbuKit
+import Foundation
 
 @MainActor
-final class AuthorizationServiceFSTests: XCTestCase {
-    
-    // MARK: - Properties
-    
-    var programmerRoleId: String!
-    var logisticsRoleId: String!
-    var sanitaryRoleId: String!
-    
-    // MARK: - Setup
-    
-    override func setUp() async throws {
-        try await super.setUp()
+@Suite(.tags(.firebase, .slow), .timeLimit(.minutes(2)))
+struct AuthorizationServiceFSTests {
+
+    private let programmerRoleId: String?
+    private let logisticsRoleId: String?
+    private let sanitaryRoleId: String?
+
+    init() async throws {
         PolicyService.shared.clearCache()
-        
-        // Obtener IDs de roles dinámicamente
-        try await fetchRoleIds()
-    }
-    
-    override func tearDown() async throws {
-        PolicyService.shared.clearCache()
-        try await super.tearDown()
-    }
-    
-    // MARK: - Setup Helpers
-    
-    private func fetchRoleIds() async throws {
+
         let roles = await PolicyService.shared.getAllRoles()
-        
-        programmerRoleId = roles.first(where: { $0.kind == .programmer })?.id
-        logisticsRoleId = roles.first(where: { $0.kind == .logistics })?.id
-        sanitaryRoleId = roles.first(where: { $0.kind == .sanitary })?.id
-        
-        guard programmerRoleId != nil, logisticsRoleId != nil, sanitaryRoleId != nil else {
-            throw XCTSkip("No se encontraron los 3 roles en Firebase")
-        }
+        self.programmerRoleId = roles.first(where: { $0.kind == .programmer })?.id
+        self.logisticsRoleId = roles.first(where: { $0.kind == .logistics })?.id
+        self.sanitaryRoleId = roles.first(where: { $0.kind == .sanitary })?.id
     }
-    
+
     // MARK: - canCreateKits Tests
-    
-    func testCanCreateKitsHelper() async throws {
-        let programmer = createTestUser(roleId: programmerRoleId)
-        let logistics = createTestUser(roleId: logisticsRoleId)
-        let sanitary = createTestUser(roleId: sanitaryRoleId)
-        
-        let programmerCan = await AuthorizationServiceFS.canCreateKits(programmer)
-        let logisticsCan = await AuthorizationServiceFS.canCreateKits(logistics)
-        let sanitaryCan = await AuthorizationServiceFS.canCreateKits(sanitary)
-        
-        XCTAssertTrue(programmerCan, "Programmer debería poder crear kits")
-        XCTAssertTrue(logisticsCan, "Logistics debería poder crear kits")
-        XCTAssertFalse(sanitaryCan, "Sanitary no debería poder crear kits")
+
+    @Test func canCreateKitsHelper() async throws {
+        guard let pid = programmerRoleId, let lid = logisticsRoleId, let sid = sanitaryRoleId else { return }
+
+        let programmer = makeUser(roleId: pid)
+        let logistics = makeUser(roleId: lid)
+        let sanitary = makeUser(roleId: sid)
+
+        #expect(await AuthorizationServiceFS.canCreateKits(programmer))
+        #expect(await AuthorizationServiceFS.canCreateKits(logistics))
+        #expect(!(await AuthorizationServiceFS.canCreateKits(sanitary)))
     }
-    
-    // MARK: - canCreateVehicles Tests
-    
-    func testCanCreateVehiclesHelper() async throws {
-        let programmer = createTestUser(roleId: programmerRoleId)
-        let logistics = createTestUser(roleId: logisticsRoleId)
-        let sanitary = createTestUser(roleId: sanitaryRoleId)
-        
-        let programmerCan = await AuthorizationServiceFS.canCreateVehicles(programmer)
-        let logisticsCan = await AuthorizationServiceFS.canCreateVehicles(logistics)
-        let sanitaryCan = await AuthorizationServiceFS.canCreateVehicles(sanitary)
-        
-        XCTAssertTrue(programmerCan, "Programmer debería poder crear vehículos")
-        XCTAssertTrue(logisticsCan, "Logistics debería poder crear vehículos")
-        XCTAssertFalse(sanitaryCan, "Sanitary no debería poder crear vehículos")
+
+    @Test func canCreateVehiclesHelper() async throws {
+        guard let pid = programmerRoleId, let lid = logisticsRoleId, let sid = sanitaryRoleId else { return }
+
+        let programmer = makeUser(roleId: pid)
+        let logistics = makeUser(roleId: lid)
+        let sanitary = makeUser(roleId: sid)
+
+        #expect(await AuthorizationServiceFS.canCreateVehicles(programmer))
+        #expect(await AuthorizationServiceFS.canCreateVehicles(logistics))
+        #expect(!(await AuthorizationServiceFS.canCreateVehicles(sanitary)))
     }
-    
+
     // MARK: - Logistics Tests
-    
-    func testLogisticsCanCreateKits() async throws {
-        let logistics = createTestUser(roleId: logisticsRoleId)
-        let canCreate = await AuthorizationServiceFS.canCreateKits(logistics)
-        XCTAssertTrue(canCreate, "Logística puede crear kits")
+
+    @Test func logisticsCanCreateKits() async throws {
+        guard let lid = logisticsRoleId else { return }
+        let logistics = makeUser(roleId: lid)
+        #expect(await AuthorizationServiceFS.canCreateKits(logistics))
     }
-    
-    func testLogisticsCanCreateVehicles() async throws {
-        let logistics = createTestUser(roleId: logisticsRoleId)
-        let canCreate = await AuthorizationServiceFS.canCreateVehicles(logistics)
-        XCTAssertTrue(canCreate, "Logística puede crear vehículos")
+
+    @Test func logisticsCanCreateVehicles() async throws {
+        guard let lid = logisticsRoleId else { return }
+        let logistics = makeUser(roleId: lid)
+        #expect(await AuthorizationServiceFS.canCreateVehicles(logistics))
     }
-    
-    func testLogisticsCannotManageUsers() async throws {
-        let logistics = createTestUser(roleId: logisticsRoleId)
-        let canManage = await AuthorizationServiceFS.canManageUsers(logistics)
-        XCTAssertFalse(canManage, "Logística NO puede gestionar usuarios")
+
+    @Test func logisticsCannotManageUsers() async throws {
+        guard let lid = logisticsRoleId else { return }
+        let logistics = makeUser(roleId: lid)
+        #expect(!(await AuthorizationServiceFS.canManageUsers(logistics)))
     }
-    
+
     // MARK: - Sanitary Tests
-    
-    func testSanitaryCannotCreateKits() async throws {
-        let sanitary = createTestUser(roleId: sanitaryRoleId)
-        let canCreate = await AuthorizationServiceFS.canCreateKits(sanitary)
-        XCTAssertFalse(canCreate, "Sanitario NO puede crear kits")
+
+    @Test func sanitaryCannotCreateKits() async throws {
+        guard let sid = sanitaryRoleId else { return }
+        let sanitary = makeUser(roleId: sid)
+        #expect(!(await AuthorizationServiceFS.canCreateKits(sanitary)))
     }
-    
-    func testSanitaryCannotCreateVehicles() async throws {
-        let sanitary = createTestUser(roleId: sanitaryRoleId)
-        let canCreate = await AuthorizationServiceFS.canCreateVehicles(sanitary)
-        XCTAssertFalse(canCreate, "Sanitario NO puede crear vehículos")
+
+    @Test func sanitaryCannotCreateVehicles() async throws {
+        guard let sid = sanitaryRoleId else { return }
+        let sanitary = makeUser(roleId: sid)
+        #expect(!(await AuthorizationServiceFS.canCreateVehicles(sanitary)))
     }
-    
-    func testSanitaryCanUpdateStock() async throws {
-        let sanitary = createTestUser(roleId: sanitaryRoleId)
-        let canUpdate = await AuthorizationServiceFS.canUpdateStock(sanitary)
-        XCTAssertTrue(canUpdate, "Sanitario SÍ puede actualizar stock")
+
+    @Test func sanitaryCanUpdateStock() async throws {
+        guard let sid = sanitaryRoleId else { return }
+        let sanitary = makeUser(roleId: sid)
+        #expect(await AuthorizationServiceFS.canUpdateStock(sanitary))
     }
-    
+
     // MARK: - Programmer Tests
-    
-    func testProgrammerHasFullAccess() async throws {
-        let programmer = createTestUser(roleId: programmerRoleId)
-        
-        let canCreateKits = await AuthorizationServiceFS.canCreateKits(programmer)
-        let canCreateVehicles = await AuthorizationServiceFS.canCreateVehicles(programmer)
-        let canEditThresholds = await AuthorizationServiceFS.canEditThresholds(programmer)
-        let canManageUsers = await AuthorizationServiceFS.canManageUsers(programmer)
-        let canUpdateStock = await AuthorizationServiceFS.canUpdateStock(programmer)
-        
-        XCTAssertTrue(canCreateKits)
-        XCTAssertTrue(canCreateVehicles)
-        XCTAssertTrue(canEditThresholds)
-        XCTAssertTrue(canManageUsers)
-        XCTAssertTrue(canUpdateStock)
+
+    @Test func programmerHasFullAccess() async throws {
+        guard let pid = programmerRoleId else { return }
+        let programmer = makeUser(roleId: pid)
+
+        #expect(await AuthorizationServiceFS.canCreateKits(programmer))
+        #expect(await AuthorizationServiceFS.canCreateVehicles(programmer))
+        #expect(await AuthorizationServiceFS.canEditThresholds(programmer))
+        #expect(await AuthorizationServiceFS.canManageUsers(programmer))
+        #expect(await AuthorizationServiceFS.canUpdateStock(programmer))
     }
-    
+
     // MARK: - UIPermissionsFS Tests
-    
-    func testUIPermissionsFSCompatibility() async throws {
-        let logistics = createTestUser(roleId: logisticsRoleId)
-        
-        // Verificar helpers específicos (estos SÍ controlamos)
-        let canCreateKits = await UIPermissionsFS.canCreateKits(logistics)
-        let canCreateVehicles = await UIPermissionsFS.canCreateVehicles(logistics)
-        let canEditThresholds = await UIPermissionsFS.canEditThresholds(logistics)
-        
-        XCTAssertTrue(canCreateKits, "Logistics puede crear kits")
-        XCTAssertTrue(canCreateVehicles, "Logistics puede crear vehículos")
-        XCTAssertTrue(canEditThresholds, "Logistics puede editar umbrales")
-        
-        // Permisos de usuario - solo verificamos que NO puede crear/eliminar
+
+    @Test func uiPermissionsFSCompatibility() async throws {
+        guard let lid = logisticsRoleId else { return }
+        let logistics = makeUser(roleId: lid)
+
+        #expect(await UIPermissionsFS.canCreateKits(logistics))
+        #expect(await UIPermissionsFS.canCreateVehicles(logistics))
+        #expect(await UIPermissionsFS.canEditThresholds(logistics))
+
         let userMgmt = await UIPermissionsFS.userMgmt(logistics)
-        XCTAssertFalse(userMgmt.create, "Logistics no puede crear usuarios")
-        XCTAssertFalse(userMgmt.delete, "Logistics no puede eliminar usuarios")
-        // read y update dependen de políticas Firebase - no verificamos
+        #expect(!userMgmt.create)
+        #expect(!userMgmt.delete)
     }
-    
-    // MARK: - Helper Methods
-    
-    private func createTestUser(roleId: String) -> UserFS {
+
+    // MARK: - Helper
+
+    private func makeUser(roleId: String) -> UserFS {
         UserFS(
             id: "test-user-\(UUID().uuidString.prefix(6))",
             uid: "firebase-uid-\(UUID().uuidString.prefix(6))",

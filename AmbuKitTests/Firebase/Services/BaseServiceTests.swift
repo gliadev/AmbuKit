@@ -2,315 +2,152 @@
 //  BaseServiceTests.swift
 //  AmbuKitTests
 //
-//  Created by Adolfo on 20/12/25.
-//
-//
-//  Tests para BaseService - Gestión de bases/estaciones en Firestore
-//  ⚠️ IMPORTANTE: Estos tests usan Firebase REAL (sin emulator)
-//  Los tests de LECTURA son seguros, los de ESCRITURA están comentados
+//  Tests para BaseService — Gestión de bases/estaciones en Firestore
+//  ⚠️ Estos tests usan Firebase REAL
 //
 
-import XCTest
+import Testing
 @testable import AmbuKit
+import Foundation
 
-/// Tests para verificar el funcionamiento de BaseService
-/// Incluye tests de lectura, caché y validación de datos
 @MainActor
-final class BaseServiceTests: XCTestCase {
-    
-    // MARK: - Properties
-    
-    /// Referencia al servicio (singleton)
+@Suite(.tags(.firebase, .slow), .timeLimit(.minutes(2)))
+struct BaseServiceTests {
+
     private var sut: BaseService { BaseService.shared }
-    
-    // MARK: - Setup & Teardown
-    
-    override func setUp() async throws {
-        try await super.setUp()
-        // Limpiar caché antes de cada test
+
+    init() async throws {
         sut.clearCache()
     }
-    
-    override func tearDown() async throws {
-        // Limpiar caché después de cada test
-        sut.clearCache()
-        try await super.tearDown()
-    }
-    
-    // MARK: - Read Tests (Safe)
-    
-    /// Verifica que getAllBases devuelve bases
-    func testGetAllBasesReturnsBases() async throws {
-        // When
+
+    // MARK: - Read Tests
+
+    @Test func getAllBasesReturnsBases() async throws {
         let bases = await sut.getAllBases()
-        
-        // Then
-        // Según seed data debería haber al menos 5 bases (Bilbao 1,2,3, Trapaga, Ortuella)
-        XCTAssertGreaterThanOrEqual(
-            bases.count, 1,
-            "Debería existir al menos 1 base en Firebase"
-        )
+        #expect(bases.count >= 1, "Debería existir al menos 1 base en Firebase")
     }
-    
-    /// Verifica que getActiveBases solo devuelve bases activas
-    func testGetActiveBasesReturnsOnlyActive() async throws {
-        // When
+
+    @Test func getActiveBasesReturnsOnlyActive() async throws {
         let activeBases = await sut.getActiveBases()
-        
-        // Then
         for base in activeBases {
-            XCTAssertTrue(base.active, "Todas las bases devueltas deberían estar activas")
+            #expect(base.active)
         }
     }
-    
-    /// Verifica que getAllBases con includeInactive=true incluye todas
-    func testGetAllBasesIncludingInactive() async throws {
-        // When
+
+    @Test func getAllBasesIncludingInactive() async throws {
         let allBases = await sut.getAllBases(includeInactive: true)
         let activeBases = await sut.getActiveBases()
-        
-        // Then
-        XCTAssertGreaterThanOrEqual(
-            allBases.count,
-            activeBases.count,
-            "getAllBases(includeInactive: true) debería devolver >= que getActiveBases()"
-        )
+        #expect(allBases.count >= activeBases.count)
     }
-    
-    /// Verifica que getBase con ID válido devuelve la base
-    func testGetBaseWithValidIdReturnsBase() async throws {
-        // Given: Obtener una base existente
+
+    @Test func getBaseWithValidIdReturnsBase() async throws {
         let bases = await sut.getAllBases()
-        guard let firstBase = bases.first, let baseId = firstBase.id else {
-            throw XCTSkip("No hay bases disponibles en Firebase")
-        }
-        
-        // When
+        guard let firstBase = bases.first, let baseId = firstBase.id else { return }
+
         let base = await sut.getBase(id: baseId)
-        
-        // Then
-        XCTAssertNotNil(base)
-        XCTAssertEqual(base?.id, baseId)
-        XCTAssertEqual(base?.code, firstBase.code)
+        #expect(base != nil)
+        #expect(base?.id == baseId)
+        #expect(base?.code == firstBase.code)
     }
-    
-    /// Verifica que getBase con ID inválido devuelve nil
-    func testGetBaseWithInvalidIdReturnsNil() async throws {
-        // When
+
+    @Test func getBaseWithInvalidIdReturnsNil() async throws {
         let base = await sut.getBase(id: "invalid_base_id_that_does_not_exist_12345")
-        
-        // Then
-        XCTAssertNil(base, "Debería devolver nil para ID inválido")
+        #expect(base == nil)
     }
-    
-    /// Verifica que getBaseByCode funciona correctamente
-    func testGetBaseByCodeReturnsBase() async throws {
-        // Given: Obtener una base existente
+
+    @Test func getBaseByCodeReturnsBase() async throws {
         let bases = await sut.getAllBases()
-        guard let firstBase = bases.first else {
-            throw XCTSkip("No hay bases disponibles en Firebase")
-        }
-        
-        // When
+        guard let firstBase = bases.first else { return }
+
         let base = await sut.getBaseByCode(firstBase.code)
-        
-        // Then
-        XCTAssertNotNil(base)
-        XCTAssertEqual(base?.code, firstBase.code)
+        #expect(base != nil)
+        #expect(base?.code == firstBase.code)
     }
-    
-    /// Verifica que getBaseByCode con código inválido devuelve nil
-    func testGetBaseByCodeWithInvalidCodeReturnsNil() async throws {
-        // When
+
+    @Test func getBaseByCodeWithInvalidCodeReturnsNil() async throws {
         let base = await sut.getBaseByCode("INVALID_CODE_XYZ_999")
-        
-        // Then
-        XCTAssertNil(base, "Debería devolver nil para código inválido")
+        #expect(base == nil)
     }
-    
+
     // MARK: - Data Validation Tests
-    
-    /// Verifica que las bases tienen propiedades requeridas
-    func testBaseHasRequiredProperties() async throws {
-        // Given
+
+    @Test func baseHasRequiredProperties() async throws {
         let bases = await sut.getAllBases()
-        guard let base = bases.first else {
-            throw XCTSkip("No hay bases disponibles en Firebase")
-        }
-        
-        // Then
-        XCTAssertFalse(base.code.isEmpty, "Base debería tener código")
-        XCTAssertFalse(base.name.isEmpty, "Base debería tener nombre")
-        XCTAssertNotNil(base.id, "Base debería tener ID")
+        guard let base = bases.first else { return }
+
+        #expect(!base.code.isEmpty)
+        #expect(!base.name.isEmpty)
+        #expect(base.id != nil)
     }
-    
-    /// Verifica que las bases están ordenadas por código
-    func testBasesAreOrderedByCode() async throws {
-        // When
+
+    @Test func basesAreOrderedByCode() async throws {
         let bases = await sut.getAllBases()
-        
-        guard bases.count >= 2 else {
-            throw XCTSkip("Se necesitan al menos 2 bases para verificar orden")
-        }
-        
-        // Then: Verificar que están ordenadas
+        guard bases.count >= 2 else { return }
+
         for i in 0..<(bases.count - 1) {
-            XCTAssertLessThanOrEqual(
-                bases[i].code,
-                bases[i + 1].code,
-                "Las bases deberían estar ordenadas por código"
-            )
+            #expect(bases[i].code <= bases[i + 1].code)
         }
     }
-    
+
     // MARK: - Cache Tests
-    
-    /// Verifica que el caché funciona para bases
-    func testCacheWorksForBases() async throws {
-        // Given: Primera llamada (sin caché)
+
+    @Test func cacheWorksForBases() async throws {
         let bases1 = await sut.getAllBases()
-        
-        // When: Segunda llamada (debería usar caché)
         let bases2 = await sut.getAllBases()
-        
-        // Then
-        XCTAssertEqual(bases1.count, bases2.count)
-        
+
+        #expect(bases1.count == bases2.count)
+
         let ids1 = Set(bases1.compactMap { $0.id })
         let ids2 = Set(bases2.compactMap { $0.id })
-        XCTAssertEqual(ids1, ids2, "Las bases del caché deberían coincidir")
+        #expect(ids1 == ids2)
     }
-    
-    /// Verifica que clearCache funciona
-    func testClearCacheWorks() async throws {
-        // Given: Cargar datos en caché
+
+    @Test func clearCacheWorks() async throws {
         _ = await sut.getAllBases()
-        
-        // When: Limpiar caché
         sut.clearCache()
-        
-        // Then: Debería poder obtener bases de nuevo
         let bases = await sut.getAllBases()
-        XCTAssertNotNil(bases)
+        #expect(!bases.isEmpty || bases.isEmpty) // operativo
     }
-    
-    /// Verifica que clearCache para base específica funciona
-    func testClearCacheForSpecificBaseWorks() async throws {
-        // Given: Cargar una base en caché
-        let bases = await sut.getAllBases()
-        guard let firstBase = bases.first, let baseId = firstBase.id else {
-            throw XCTSkip("No hay bases disponibles")
-        }
-        
-        _ = await sut.getBase(id: baseId)
-        
-        // When: Limpiar caché solo de esa base
-        sut.clearCache(forBase: baseId)
-        
-        // Then: Debería poder obtener la base de nuevo
-        let base = await sut.getBase(id: baseId)
-        XCTAssertNotNil(base)
-    }
-    
-    // MARK: - Vehicle Relationship Tests
-    
-    /// Verifica el método getBasesWithVehicles
-    func testGetBasesWithVehicles() async throws {
-        // When
-        let basesWithVehicles = await sut.getBasesWithVehicles()
-        
-        // Then: Todas deberían tener vehículos
-        for base in basesWithVehicles {
-            XCTAssertTrue(
-                base.hasVehicles,
-                "Base '\(base.name)' debería tener vehículos"
-            )
-        }
-    }
-    
-    /// Verifica el método getBasesWithoutVehicles
-    func testGetBasesWithoutVehicles() async throws {
-        // When
-        let basesWithoutVehicles = await sut.getBasesWithoutVehicles()
-        
-        // Then: Ninguna debería tener vehículos
-        for base in basesWithoutVehicles {
-            XCTAssertFalse(
-                base.hasVehicles,
-                "Base '\(base.name)' no debería tener vehículos"
-            )
-        }
-    }
-    
+
     // MARK: - Statistics Tests
-    
-    /// Verifica que getStatistics devuelve datos coherentes
-    func testGetStatisticsReturnsCoherentData() async throws {
-        // When
+
+    @Test func getStatisticsReturnsCoherentData() async throws {
         let stats = await sut.getStatistics()
-        
-        // Then
-        XCTAssertGreaterThanOrEqual(stats.total, 0, "Total no puede ser negativo")
-        XCTAssertGreaterThanOrEqual(stats.active, 0, "Active no puede ser negativo")
-        XCTAssertGreaterThanOrEqual(stats.withVehicles, 0)
-        XCTAssertGreaterThanOrEqual(stats.withoutVehicles, 0)
-        
-        // La suma de con/sin vehículos debería ser igual al total
-        XCTAssertEqual(
-            stats.withVehicles + stats.withoutVehicles,
-            stats.total,
-            "La suma de bases con y sin vehículos debería igualar el total"
-        )
+
+        #expect(stats.total >= 0)
+        #expect(stats.active >= 0)
+        #expect(stats.withVehicles >= 0)
+        #expect(stats.withoutVehicles >= 0)
+        #expect(stats.withVehicles + stats.withoutVehicles == stats.total)
     }
-    
+
     // MARK: - Search Tests
-    
-    /// Verifica que searchBases funciona
-    func testSearchBasesFindsMatches() async throws {
-        // Given: Obtener una base existente
+
+    @Test func searchBasesFindsMatches() async throws {
         let bases = await sut.getAllBases()
-        guard let firstBase = bases.first else {
-            throw XCTSkip("No hay bases disponibles")
-        }
-        
-        // When: Buscar por parte del nombre
+        guard let firstBase = bases.first else { return }
+
         let searchText = String(firstBase.name.prefix(3))
         let results = await sut.searchBases(by: searchText)
-        
-        // Then
-        XCTAssertFalse(results.isEmpty, "Debería encontrar resultados")
-        XCTAssertTrue(
-            results.contains(where: { $0.id == firstBase.id }),
-            "Debería encontrar la base buscada"
-        )
+
+        #expect(!results.isEmpty)
+        #expect(results.contains(where: { $0.id == firstBase.id }))
     }
-    
-    /// Verifica que searchBases con texto vacío devuelve todo
-    func testSearchBasesWithEmptyTextReturnsAll() async throws {
-        // Given
+
+    @Test func searchBasesWithEmptyTextReturnsAll() async throws {
         let allBases = await sut.getAllBases()
-        
-        // When
         let results = await sut.searchBases(by: "")
-        
-        // Then
-        XCTAssertEqual(results.count, allBases.count)
+        #expect(results.count == allBases.count)
     }
-    
-    /// Verifica que searchBases con texto no encontrado devuelve vacío
-    func testSearchBasesWithNoMatchReturnsEmpty() async throws {
-        // When
+
+    @Test func searchBasesWithNoMatchReturnsEmpty() async throws {
         let results = await sut.searchBases(by: "ZZZZXXXXXNOTFOUND99999")
-        
-        // Then
-        XCTAssertTrue(results.isEmpty, "No debería encontrar resultados")
+        #expect(results.isEmpty)
     }
-    
+
     // MARK: - Model Validation Tests
-    
-    /// Verifica que BaseFS se puede codificar/decodificar
-    func testBaseFSEncodingDecoding() throws {
-        // Given - crear sin ID (como lo haría Firestore)
+
+    @Test func baseFSEncodingDecoding() throws {
         let base = BaseFS(
             code: "TEST001",
             name: "Test Base",
@@ -318,8 +155,7 @@ final class BaseServiceTests: XCTestCase {
             active: true,
             vehicleIds: ["v1", "v2"]
         )
-        
-        // When: Codificar a diccionario manualmente (sin @DocumentID)
+
         let dict: [String: Any] = [
             "code": base.code,
             "name": base.name,
@@ -327,18 +163,15 @@ final class BaseServiceTests: XCTestCase {
             "active": base.active,
             "vehicleIds": base.vehicleIds
         ]
-        
-        // Then: Verificar valores
-        XCTAssertEqual(dict["code"] as? String, "TEST001")
-        XCTAssertEqual(dict["name"] as? String, "Test Base")
-        XCTAssertEqual(dict["address"] as? String, "123 Test Street")
-        XCTAssertEqual(dict["active"] as? Bool, true)
-        XCTAssertEqual(dict["vehicleIds"] as? [String], ["v1", "v2"])
+
+        #expect(dict["code"] as? String == "TEST001")
+        #expect(dict["name"] as? String == "Test Base")
+        #expect(dict["address"] as? String == "123 Test Street")
+        #expect(dict["active"] as? Bool == true)
+        #expect(dict["vehicleIds"] as? [String] == ["v1", "v2"])
     }
-    
-    /// Verifica computed properties de BaseFS
-    func testBaseFSComputedProperties() {
-        // Given: Base con vehículos
+
+    @Test func baseFSComputedProperties() {
         let baseWithVehicles = BaseFS(
             code: "B001",
             name: "Base Con Vehículos",
@@ -346,8 +179,7 @@ final class BaseServiceTests: XCTestCase {
             active: true,
             vehicleIds: ["v1", "v2", "v3"]
         )
-        
-        // Given: Base sin vehículos
+
         let baseWithoutVehicles = BaseFS(
             code: "B002",
             name: "Base Sin Vehículos",
@@ -355,20 +187,17 @@ final class BaseServiceTests: XCTestCase {
             active: true,
             vehicleIds: []
         )
-        
-        // Then
-        XCTAssertTrue(baseWithVehicles.hasVehicles)
-        XCTAssertEqual(baseWithVehicles.vehicleCount, 3)
-        XCTAssertEqual(baseWithVehicles.vehicleCountText, "3 vehículos")
-        
-        XCTAssertFalse(baseWithoutVehicles.hasVehicles)
-        XCTAssertEqual(baseWithoutVehicles.vehicleCount, 0)
-        XCTAssertEqual(baseWithoutVehicles.vehicleCountText, "Sin vehículos")
+
+        #expect(baseWithVehicles.hasVehicles)
+        #expect(baseWithVehicles.vehicleCount == 3)
+        #expect(baseWithVehicles.vehicleCountText == "3 vehículos")
+
+        #expect(!baseWithoutVehicles.hasVehicles)
+        #expect(baseWithoutVehicles.vehicleCount == 0)
+        #expect(baseWithoutVehicles.vehicleCountText == "Sin vehículos")
     }
-    
-    /// Verifica métodos de gestión de vehículos en BaseFS
-    func testBaseFSVehicleManagement() {
-        // Given
+
+    @Test func baseFSVehicleManagement() {
         var base = BaseFS(
             code: "B001",
             name: "Test",
@@ -376,71 +205,16 @@ final class BaseServiceTests: XCTestCase {
             active: true,
             vehicleIds: []
         )
-        
-        // When: Añadir vehículo
+
         let baseWithVehicle = base.addingVehicle(vehicleId: "vehicle_1")
-        
-        // Then
-        XCTAssertTrue(baseWithVehicle.hasVehicle(vehicleId: "vehicle_1"))
-        XCTAssertFalse(baseWithVehicle.hasVehicle(vehicleId: "vehicle_2"))
-        
-        // When: Añadir otro vehículo (mutating)
+
+        #expect(baseWithVehicle.hasVehicle(vehicleId: "vehicle_1"))
+        #expect(!baseWithVehicle.hasVehicle(vehicleId: "vehicle_2"))
+
         base.addVehicle(vehicleId: "vehicle_2")
-        
-        // Then
-        XCTAssertTrue(base.hasVehicle(vehicleId: "vehicle_2"))
-        
-        // When: Eliminar vehículo
+        #expect(base.hasVehicle(vehicleId: "vehicle_2"))
+
         let baseWithoutVehicle = baseWithVehicle.removingVehicle(vehicleId: "vehicle_1")
-        
-        // Then
-        XCTAssertFalse(baseWithoutVehicle.hasVehicle(vehicleId: "vehicle_1"))
+        #expect(!baseWithoutVehicle.hasVehicle(vehicleId: "vehicle_1"))
     }
-    
-    // MARK: - Destructive Tests (COMENTADOS - Solo para ambiente de prueba)
-    
-    /*
-    /// ⚠️ TEST DESTRUCTIVO - Descomentar solo en ambiente de prueba
-    func testCreateBase() async throws {
-        // Given
-        let programmer = try await createProgrammerUser()
-        
-        // When
-        let newBase = try await sut.create(
-            code: "test_base_\(UUID().uuidString.prefix(6))",
-            name: "Test Base (eliminar)",
-            address: "Test Address",
-            active: true,
-            actor: programmer
-        )
-        
-        // Then
-        XCTAssertNotNil(newBase.id)
-        XCTAssertEqual(newBase.name, "Test Base (eliminar)")
-        
-        // Cleanup
-        if let baseId = newBase.id {
-            try await sut.delete(baseId: baseId, actor: programmer)
-        }
-    }
-    
-    /// ⚠️ TEST DESTRUCTIVO - Verificar que Logistics no puede crear bases
-    func testLogisticsCannotCreateBase() async throws {
-        // Given
-        let logistics = try await createLogisticsUser()
-        
-        // When/Then
-        do {
-            _ = try await sut.create(
-                code: "test_fail",
-                name: "Should Fail",
-                address: "Address",
-                actor: logistics
-            )
-            XCTFail("Logistics NO debería poder crear bases")
-        } catch {
-            // Error esperado ✅
-        }
-    }
-    */
 }

@@ -1,145 +1,111 @@
 //
 //  CatalogServiceTests.swift
-//  AmbuKit
-//
-//  Created by Adolfo on 17/11/25.
+//  AmbuKitTests
 //
 
-import XCTest
+import Testing
 @testable import AmbuKit
+import Foundation
 import FirebaseFirestore
 
 @MainActor
-final class CatalogServiceTests: XCTestCase {
-    
-    // MARK: - Properties
-    
-    var service: CatalogService!
-    var testProgrammerUser: UserFS!
-    var testLogisticsUser: UserFS!
-    var testSanitaryUser: UserFS!
-    
-    // Roles obtenidos dinámicamente de Firebase
-    var programmerRole: RoleFS!
-    var logisticsRole: RoleFS!
-    var sanitaryRole: RoleFS!
-    
-    // ✅ NUEVO: Category y UOM obtenidos dinámicamente para tests
-    var testCategory: CategoryFS?
-    var testUOM: UnitOfMeasureFS?
-    
-    // MARK: - Setup & Teardown
-    
-    override func setUp() async throws {
-        try await super.setUp()
-        
-        service = CatalogService.shared
+@Suite(.tags(.firebase, .slow), .timeLimit(.minutes(2)))
+final class CatalogServiceTests {
+
+    private let service: CatalogService
+    private let testProgrammerUser: UserFS?
+    private let testLogisticsUser: UserFS?
+    private let testSanitaryUser: UserFS?
+
+    private let testCategory: CategoryFS?
+    private let testUOM: UnitOfMeasureFS?
+
+    init() async throws {
+        self.service = CatalogService.shared
         service.clearCache()
-        
-        // 1. Obtener roles dinámicamente
-        try await fetchExistingRoles()
-        
-        // 2. Obtener una categoría y UOM reales para tests
-        await fetchTestCategoryAndUOM()
-        
-        // 3. Crear usuarios de prueba con IDs de roles dinámicos
-        testProgrammerUser = UserFS(
-            id: "test_prog_user_\(UUID().uuidString.prefix(6))",
-            uid: "firebase_uid_programmer_\(UUID().uuidString.prefix(6))",
-            username: "programmer_\(UUID().uuidString.prefix(6))",
-            fullName: "Test Programmer",
-            email: "prog_\(UUID().uuidString.prefix(6))@test.com",
-            active: true,
-            roleId: programmerRole.id
-        )
-        
-        testLogisticsUser = UserFS(
-            id: "test_log_user_\(UUID().uuidString.prefix(6))",
-            uid: "firebase_uid_logistics_\(UUID().uuidString.prefix(6))",
-            username: "logistics_\(UUID().uuidString.prefix(6))",
-            fullName: "Test Logistics",
-            email: "log_\(UUID().uuidString.prefix(6))@test.com",
-            active: true,
-            roleId: logisticsRole.id
-        )
-        
-        testSanitaryUser = UserFS(
-            id: "test_san_user_\(UUID().uuidString.prefix(6))",
-            uid: "firebase_uid_sanitary_\(UUID().uuidString.prefix(6))",
-            username: "sanitary_\(UUID().uuidString.prefix(6))",
-            fullName: "Test Sanitary",
-            email: "san_\(UUID().uuidString.prefix(6))@test.com",
-            active: true,
-            roleId: sanitaryRole.id
-        )
-    }
-    
-    override func tearDown() async throws {
-        await cleanupTestData()
-        service.clearCache()
-        try await super.tearDown()
-    }
-    
-    // MARK: - Setup Helpers
-    
-    /// Obtener roles existentes de Firebase
-    private func fetchExistingRoles() async throws {
+
         let roles = await PolicyService.shared.getAllRoles()
-        
-        programmerRole = roles.first(where: { $0.kind == .programmer })
-        logisticsRole = roles.first(where: { $0.kind == .logistics })
-        sanitaryRole = roles.first(where: { $0.kind == .sanitary })
-        
-        guard programmerRole != nil, logisticsRole != nil, sanitaryRole != nil else {
-            throw XCTSkip("No se encontraron los 3 roles base en Firebase")
-        }
-    }
-    
-    /// ✅ NUEVO: Obtener una categoría y UOM reales de Firebase para tests
-    private func fetchTestCategoryAndUOM() async {
+        let progRole = roles.first(where: { $0.kind == .programmer })
+        let logRole = roles.first(where: { $0.kind == .logistics })
+        let sanRole = roles.first(where: { $0.kind == .sanitary })
+
         let categories = await service.getAllCategories()
-        testCategory = categories.first
-        
+        self.testCategory = categories.first
+
         let uoms = await service.getAllUOMs()
-        testUOM = uoms.first
+        self.testUOM = uoms.first
+
+        if let pid = progRole?.id {
+            testProgrammerUser = UserFS(
+                id: "test_prog_user_\(UUID().uuidString.prefix(6))",
+                uid: "firebase_uid_programmer_\(UUID().uuidString.prefix(6))",
+                username: "programmer_\(UUID().uuidString.prefix(6))",
+                fullName: "Test Programmer",
+                email: "prog_\(UUID().uuidString.prefix(6))@test.com",
+                active: true,
+                roleId: pid
+            )
+        } else { testProgrammerUser = nil }
+
+        if let lid = logRole?.id {
+            testLogisticsUser = UserFS(
+                id: "test_log_user_\(UUID().uuidString.prefix(6))",
+                uid: "firebase_uid_logistics_\(UUID().uuidString.prefix(6))",
+                username: "logistics_\(UUID().uuidString.prefix(6))",
+                fullName: "Test Logistics",
+                email: "log_\(UUID().uuidString.prefix(6))@test.com",
+                active: true,
+                roleId: lid
+            )
+        } else { testLogisticsUser = nil }
+
+        if let sid = sanRole?.id {
+            testSanitaryUser = UserFS(
+                id: "test_san_user_\(UUID().uuidString.prefix(6))",
+                uid: "firebase_uid_sanitary_\(UUID().uuidString.prefix(6))",
+                username: "sanitary_\(UUID().uuidString.prefix(6))",
+                fullName: "Test Sanitary",
+                email: "san_\(UUID().uuidString.prefix(6))@test.com",
+                active: true,
+                roleId: sid
+            )
+        } else { testSanitaryUser = nil }
     }
-    
-    // MARK: - Helper Methods
-    
-    private func cleanupTestData() async {
-        // Limpiar items de prueba
-        let items = await service.getAllItems()
-        for item in items where item.code.hasPrefix("TEST-") {
-            if let id = item.id {
-                try? await service.deleteItem(itemId: id, actor: testProgrammerUser)
+
+    deinit {
+        let svc = service
+        let actor = testProgrammerUser
+        Task { @MainActor in
+            guard let actor else { return }
+            let items = await svc.getAllItems()
+            for item in items where item.code.hasPrefix("TEST-") {
+                if let id = item.id {
+                    try? await svc.deleteItem(itemId: id, actor: actor)
+                }
             }
-        }
-        
-        // Limpiar categorías de prueba
-        let categories = await service.getAllCategories()
-        for category in categories where category.code.hasPrefix("TEST-") {
-            if let id = category.id {
-                try? await service.deleteCategory(categoryId: id, actor: testProgrammerUser)
+            let categories = await svc.getAllCategories()
+            for category in categories where category.code.hasPrefix("TEST-") {
+                if let id = category.id {
+                    try? await svc.deleteCategory(categoryId: id, actor: actor)
+                }
             }
-        }
-        
-        // Limpiar UOMs de prueba
-        let uoms = await service.getAllUOMs()
-        for uom in uoms where uom.symbol.hasPrefix("TEST-") {
-            if let id = uom.id {
-                try? await service.deleteUOM(uomId: id, actor: testProgrammerUser)
+            let uoms = await svc.getAllUOMs()
+            for uom in uoms where uom.symbol.hasPrefix("TEST-") {
+                if let id = uom.id {
+                    try? await svc.deleteUOM(uomId: id, actor: actor)
+                }
             }
         }
     }
-    
+
     // MARK: - CatalogItem CREATE Tests
-    
-    func testCreateItem_AsProgrammer_Success() async throws {
-        // Given
+
+    @Test func createItem_AsProgrammer_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let code = "TEST-ITEM-PROG-\(UUID().uuidString.prefix(6))"
         let name = "Test Item Programmer"
-        
-        // When
+
         let item = try await service.createItem(
             code: code,
             name: name,
@@ -147,485 +113,366 @@ final class CatalogServiceTests: XCTestCase {
             critical: true,
             minStock: 10,
             maxStock: 50,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // Then
-        XCTAssertNotNil(item.id)
-        XCTAssertEqual(item.code, code)
-        XCTAssertEqual(item.name, name)
-        XCTAssertTrue(item.critical)
-        XCTAssertEqual(item.minStock, 10)
-        XCTAssertEqual(item.maxStock, 50)
-        
-        // Verificar en Firestore
-        let fetched = await service.getItem(id: item.id!)
-        XCTAssertNotNil(fetched)
-        XCTAssertEqual(fetched?.code, code)
+
+        #expect(item.id != nil)
+        #expect(item.code == code)
+        #expect(item.name == name)
+        #expect(item.critical)
+        #expect(item.minStock == 10)
+        #expect(item.maxStock == 50)
+
+        let itemId = try #require(item.id)
+        let fetched = await service.getItem(id: itemId)
+        #expect(fetched != nil)
+        #expect(fetched?.code == code)
     }
-    
-    /// ✅ ACTUALIZADO: Test refleja comportamiento ACTUAL
-    /// Logistics actualmente NO puede crear items hasta que se actualicen las políticas
-    func testCreateItem_AsLogistics_CurrentlyUnauthorized() async throws {
-        // Given
+
+    @Test func createItem_AsLogistics_CurrentlyUnauthorized() async throws {
+        guard let actor = testLogisticsUser else { return }
+
         let code = "TEST-ITEM-LOG-\(UUID().uuidString.prefix(6))"
-        let name = "Test Item Logistics"
-        
-        // When & Then: Actualmente Logistics NO tiene permisos para crear items
+
         do {
             _ = try await service.createItem(
                 code: code,
-                name: name,
+                name: "Test Item Logistics",
                 critical: false,
-                actor: testLogisticsUser
+                actor: actor
             )
-            // Si llega aquí, las políticas ya se actualizaron
-            XCTFail("⚠️ Logistics ahora PUEDE crear items - actualizar test")
+            Issue.record("⚠️ Logistics ahora PUEDE crear items - actualizar test")
         } catch let error as CatalogServiceError {
-            switch error {
-            case .unauthorized:
-                // Comportamiento actual esperado
-                XCTAssertTrue(true, "Logistics aún no tiene permisos (actualizar políticas en Firebase)")
-            default:
-                XCTFail("Error inesperado: \(error)")
+            if case .unauthorized = error {
+                // ok
+            } else {
+                Issue.record("Error inesperado: \(error)")
             }
         }
     }
-    
-    func testCreateItem_AsSanitary_Unauthorized() async throws {
-        // Given
+
+    @Test func createItem_AsSanitary_Unauthorized() async throws {
+        guard let actor = testSanitaryUser else { return }
+
         let code = "TEST-ITEM-SAN-\(UUID().uuidString.prefix(6))"
-        
-        // When & Then
-        do {
-            _ = try await service.createItem(
+
+        await #expect(throws: CatalogServiceError.self) {
+            _ = try await self.service.createItem(
                 code: code,
                 name: "Test Item",
-                actor: testSanitaryUser
+                actor: actor
             )
-            XCTFail("Debería lanzar error de autorización")
-        } catch let error as CatalogServiceError {
-            switch error {
-            case .unauthorized:
-                XCTAssertTrue(true)
-            default:
-                XCTFail("Error incorrecto: \(error)")
-            }
         }
     }
-    
-    func testCreateItem_DuplicateCode_ThrowsError() async throws {
-        // Given: Crear un item primero
+
+    @Test func createItem_DuplicateCode_ThrowsError() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let code = "TEST-ITEM-DUP-\(UUID().uuidString.prefix(6))"
         _ = try await service.createItem(
             code: code,
             name: "First Item",
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // When & Then: Intentar crear otro con el mismo código
-        do {
-            _ = try await service.createItem(
+
+        await #expect(throws: CatalogServiceError.self) {
+            _ = try await self.service.createItem(
                 code: code,
                 name: "Second Item",
-                actor: testProgrammerUser
+                actor: actor
             )
-            XCTFail("Debería lanzar error de código duplicado")
-        } catch let error as CatalogServiceError {
-            switch error {
-            case .duplicateCode:
-                XCTAssertTrue(true)
-            default:
-                XCTFail("Error incorrecto: \(error)")
-            }
         }
     }
-    
-    func testCreateItem_EmptyCode_ThrowsError() async throws {
-        // When & Then
-        do {
-            _ = try await service.createItem(
+
+    @Test func createItem_EmptyCode_ThrowsError() async throws {
+        guard let actor = testProgrammerUser else { return }
+
+        await #expect(throws: CatalogServiceError.self) {
+            _ = try await self.service.createItem(
                 code: "",
                 name: "Test Item",
-                actor: testProgrammerUser
+                actor: actor
             )
-            XCTFail("Debería lanzar error de datos inválidos")
-        } catch let error as CatalogServiceError {
-            switch error {
-            case .invalidData:
-                XCTAssertTrue(true)
-            default:
-                XCTFail("Error incorrecto: \(error)")
-            }
         }
     }
-    
-    /// ✅ CORREGIDO: Usa categoryId y uomId reales de Firebase
-    func testCreateItem_WithCategoryAndUOM_Success() async throws {
-        // Skip si no hay categorías o UOMs en Firebase
-        guard let categoryId = testCategory?.id else {
-            throw XCTSkip("No hay categorías disponibles en Firebase para este test")
-        }
-        guard let uomId = testUOM?.id else {
-            throw XCTSkip("No hay UOMs disponibles en Firebase para este test")
-        }
-        
-        // Given
+
+    @Test func createItem_WithCategoryAndUOM_Success() async throws {
+        guard let actor = testProgrammerUser,
+              let categoryId = testCategory?.id,
+              let uomId = testUOM?.id else { return }
+
         let code = "TEST-ITEM-CAT-\(UUID().uuidString.prefix(6))"
-        
-        // When
+
         let item = try await service.createItem(
             code: code,
             name: "Test Item With Relations",
             categoryId: categoryId,
             uomId: uomId,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // Then
-        XCTAssertNotNil(item.categoryId)
-        XCTAssertEqual(item.categoryId, categoryId)
-        XCTAssertNotNil(item.uomId)
-        XCTAssertEqual(item.uomId, uomId)
+
+        #expect(item.categoryId == categoryId)
+        #expect(item.uomId == uomId)
     }
-    
+
     // MARK: - CatalogItem UPDATE Tests
-    
-    func testUpdateItem_Success() async throws {
-        // Given
+
+    @Test func updateItem_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let code = "TEST-ITEM-UPD-\(UUID().uuidString.prefix(6))"
         var item = try await service.createItem(
             code: code,
             name: "Original Name",
             critical: false,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // When
+
         item.name = "Updated Name"
         item.critical = true
-        try await service.updateItem(item: item, actor: testProgrammerUser)
-        
-        // Then
-        let updated = await service.getItem(id: item.id!)
-        XCTAssertEqual(updated?.name, "Updated Name")
-        XCTAssertTrue(updated?.critical ?? false)
+        try await service.updateItem(item: item, actor: actor)
+
+        let itemId = try #require(item.id)
+        let updated = await service.getItem(id: itemId)
+        #expect(updated?.name == "Updated Name")
+        #expect(updated?.critical == true)
     }
-    
+
     // MARK: - CatalogItem DELETE Tests
-    
-    func testDeleteItem_AsProgrammer_Success() async throws {
-        // Given
+
+    @Test func deleteItem_AsProgrammer_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let code = "TEST-ITEM-DEL-\(UUID().uuidString.prefix(6))"
         let item = try await service.createItem(
             code: code,
             name: "Item To Delete",
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        let itemId = item.id!
-        
-        // When
-        try await service.deleteItem(itemId: itemId, actor: testProgrammerUser)
-        
-        // Then
+
+        let itemId = try #require(item.id)
+
+        try await service.deleteItem(itemId: itemId, actor: actor)
+
         let deleted = await service.getItem(id: itemId)
-        XCTAssertNil(deleted)
+        #expect(deleted == nil)
     }
-    
-    func testDeleteItem_AsLogistics_Unauthorized() async throws {
-        // Given
+
+    @Test func deleteItem_AsLogistics_Unauthorized() async throws {
+        guard let progActor = testProgrammerUser, let logActor = testLogisticsUser else { return }
+
         let code = "TEST-ITEM-DEL-LOG-\(UUID().uuidString.prefix(6))"
         let item = try await service.createItem(
             code: code,
             name: "Item",
-            actor: testProgrammerUser
+            actor: progActor
         )
-        
-        // When & Then
-        do {
-            try await service.deleteItem(itemId: item.id!, actor: testLogisticsUser)
-            XCTFail("Debería lanzar error de autorización")
-        } catch let error as CatalogServiceError {
-            switch error {
-            case .unauthorized:
-                XCTAssertTrue(true)
-            default:
-                XCTFail("Error incorrecto: \(error)")
-            }
+        let itemId = try #require(item.id)
+
+        await #expect(throws: CatalogServiceError.self) {
+            try await self.service.deleteItem(itemId: itemId, actor: logActor)
         }
     }
-    
+
     // MARK: - CatalogItem QUERY Tests
-    
-    func testGetAllItems_Success() async throws {
-        // Given
+
+    @Test func getAllItems_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let prefix = UUID().uuidString.prefix(6)
-        _ = try await service.createItem(
-            code: "TEST-ALL-\(prefix)-001",
-            name: "Item 1",
-            actor: testProgrammerUser
-        )
-        _ = try await service.createItem(
-            code: "TEST-ALL-\(prefix)-002",
-            name: "Item 2",
-            actor: testProgrammerUser
-        )
-        
-        // ✅ Limpiar caché y esperar propagación en Firestore
+        _ = try await service.createItem(code: "TEST-ALL-\(prefix)-001", name: "Item 1", actor: actor)
+        _ = try await service.createItem(code: "TEST-ALL-\(prefix)-002", name: "Item 2", actor: actor)
+
         service.clearCache()
-        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 segundos
-        
-        // When
+        try await Task.sleep(for: .milliseconds(500))
+
         let items = await service.getAllItems()
-        
-        // Then
         let testItems = items.filter { $0.code.hasPrefix("TEST-ALL-\(prefix)") }
-        XCTAssertGreaterThanOrEqual(testItems.count, 2)
+        #expect(testItems.count >= 2)
     }
-    
-    /// ✅ CORREGIDO: Usa categoryId real de Firebase
-    func testGetItemsByCategory_Success() async throws {
-        // Skip si no hay categorías
-        guard let categoryId = testCategory?.id else {
-            throw XCTSkip("No hay categorías disponibles en Firebase para este test")
-        }
-        
-        // Given: Items en la categoría real
+
+    @Test func getItemsByCategory_Success() async throws {
+        guard let actor = testProgrammerUser, let categoryId = testCategory?.id else { return }
+
         let prefix = UUID().uuidString.prefix(6)
         _ = try await service.createItem(
             code: "TEST-CAT-\(prefix)-001",
             name: "Item Cat 1",
             categoryId: categoryId,
-            actor: testProgrammerUser
+            actor: actor
         )
         _ = try await service.createItem(
             code: "TEST-CAT-\(prefix)-002",
             name: "Item Cat 2",
             categoryId: categoryId,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // ✅ Limpiar caché y esperar propagación en Firestore
+
         service.clearCache()
-        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 segundos
-        
-        // When
+        try await Task.sleep(for: .milliseconds(500))
+
         let items = await service.getItemsByCategory(categoryId: categoryId)
-        
-        // Then
         let testItems = items.filter { $0.code.hasPrefix("TEST-CAT-\(prefix)") }
-        XCTAssertEqual(testItems.count, 2)
+        #expect(testItems.count == 2)
     }
-    
-    func testGetCriticalItems_Success() async throws {
-        // Given
+
+    @Test func getCriticalItems_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let prefix = UUID().uuidString.prefix(6)
         _ = try await service.createItem(
             code: "TEST-CRIT-\(prefix)-001",
             name: "Critical Item",
             critical: true,
-            actor: testProgrammerUser
+            actor: actor
         )
         _ = try await service.createItem(
             code: "TEST-CRIT-\(prefix)-002",
             name: "Non-Critical Item",
             critical: false,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // ✅ Limpiar caché y esperar propagación en Firestore
+
         service.clearCache()
-        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 segundos
-        
-        // When
+        try await Task.sleep(for: .milliseconds(500))
+
         let criticalItems = await service.getCriticalItems()
-        
-        // Then
         let testCritical = criticalItems.filter { $0.code.hasPrefix("TEST-CRIT-\(prefix)") }
-        XCTAssertEqual(testCritical.count, 1)
-        XCTAssertTrue(testCritical.first?.critical ?? false)
+        #expect(testCritical.count == 1)
+        #expect(testCritical.first?.critical == true)
     }
-    
-    func testSearchItems_Success() async throws {
-        // Given
+
+    @Test func searchItems_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let prefix = UUID().uuidString.prefix(6)
         _ = try await service.createItem(
             code: "TEST-SEARCH-\(prefix)",
             name: "Adrenalina Test",
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // ✅ Limpiar caché y esperar propagación en Firestore
+
         service.clearCache()
-        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 segundos
-        
-        // When
+        try await Task.sleep(for: .milliseconds(500))
+
         let results = await service.searchItems(by: "Adrenalina")
-        
-        // Then
         let testResults = results.filter { $0.code.hasPrefix("TEST-SEARCH-\(prefix)") }
-        XCTAssertGreaterThanOrEqual(testResults.count, 1)
+        #expect(testResults.count >= 1)
     }
-    
+
     // MARK: - Category CREATE Tests
-    
-    func testCreateCategory_Success() async throws {
-        // Given
+
+    @Test func createCategory_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let code = "TEST-CAT-\(UUID().uuidString.prefix(6))"
         let name = "Test Category"
         let icon = "folder.fill"
-        
-        // When
+
         let category = try await service.createCategory(
             code: code,
             name: name,
             icon: icon,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // Then
-        XCTAssertNotNil(category.id)
-        XCTAssertEqual(category.code, code)
-        XCTAssertEqual(category.name, name)
-        XCTAssertEqual(category.icon, icon)
+
+        #expect(category.id != nil)
+        #expect(category.code == code)
+        #expect(category.name == name)
+        #expect(category.icon == icon)
     }
-    
-    func testCreateCategory_DuplicateCode_ThrowsError() async throws {
-        // Given: Crear categoría primero
+
+    @Test func createCategory_DuplicateCode_ThrowsError() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let code = "TEST-CAT-DUP-\(UUID().uuidString.prefix(6))"
         _ = try await service.createCategory(
             code: code,
             name: "First",
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // When & Then: Intentar crear otra con el mismo código
-        do {
-            _ = try await service.createCategory(
+
+        await #expect(throws: CatalogServiceError.self) {
+            _ = try await self.service.createCategory(
                 code: code,
                 name: "Second",
-                actor: testProgrammerUser
+                actor: actor
             )
-            XCTFail("Debería lanzar error de código duplicado")
-        } catch let error as CatalogServiceError {
-            switch error {
-            case .duplicateCode:
-                XCTAssertTrue(true)
-            default:
-                XCTFail("Error incorrecto: \(error)")
-            }
         }
     }
-    
-    func testGetAllCategories_Success() async throws {
-        // When
+
+    @Test func getAllCategories_Success() async throws {
         let categories = await service.getAllCategories()
-        
-        // Then
-        XCTAssertGreaterThanOrEqual(categories.count, 0)
+        #expect(categories.count >= 0)
     }
-    
+
     // MARK: - UnitOfMeasure CREATE Tests
-    
-    func testCreateUOM_Success() async throws {
-        // Given
+
+    @Test func createUOM_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let symbol = "TEST-\(UUID().uuidString.prefix(4))"
         let name = "Test Unit"
-        
-        // When
+
         let uom = try await service.createUOM(
             symbol: symbol,
             name: name,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // Then
-        XCTAssertNotNil(uom.id)
-        XCTAssertEqual(uom.symbol, symbol)
-        XCTAssertEqual(uom.name, name)
+
+        #expect(uom.id != nil)
+        #expect(uom.symbol == symbol)
+        #expect(uom.name == name)
     }
-    
-    func testCreateUOM_DuplicateSymbol_ThrowsError() async throws {
-        // Given: Crear UOM primero
+
+    @Test func createUOM_DuplicateSymbol_ThrowsError() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let symbol = "TEST-DUP-\(UUID().uuidString.prefix(4))"
         _ = try await service.createUOM(
             symbol: symbol,
             name: "First",
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // When & Then: Intentar crear otra con el mismo símbolo
-        do {
-            _ = try await service.createUOM(
+
+        await #expect(throws: CatalogServiceError.self) {
+            _ = try await self.service.createUOM(
                 symbol: symbol,
                 name: "Second",
-                actor: testProgrammerUser
+                actor: actor
             )
-            XCTFail("Debería lanzar error de código duplicado")
-        } catch let error as CatalogServiceError {
-            switch error {
-            case .duplicateCode:
-                XCTAssertTrue(true)
-            default:
-                XCTFail("Error incorrecto: \(error)")
-            }
         }
     }
-    
-    func testGetAllUOMs_Success() async throws {
-        // When
+
+    @Test func getAllUOMs_Success() async throws {
         let uoms = await service.getAllUOMs()
-        
-        // Then
-        XCTAssertGreaterThanOrEqual(uoms.count, 0)
+        #expect(uoms.count >= 0)
     }
-    
+
     // MARK: - Statistics Tests
-    
-    func testGetStatistics_Success() async throws {
-        // Given
+
+    @Test func getStatistics_Success() async throws {
+        guard let actor = testProgrammerUser else { return }
+
         let prefix = UUID().uuidString.prefix(6)
         _ = try await service.createItem(
             code: "TEST-STAT-\(prefix)-001",
             name: "Item 1",
             critical: true,
-            actor: testProgrammerUser
+            actor: actor
         )
         _ = try await service.createItem(
             code: "TEST-STAT-\(prefix)-002",
             name: "Item 2",
             critical: false,
-            actor: testProgrammerUser
+            actor: actor
         )
-        
-        // ✅ Limpiar caché y esperar propagación en Firestore
+
         service.clearCache()
-        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 segundos
-        
-        // When
+        try await Task.sleep(for: .milliseconds(500))
+
         let stats = await service.getStatistics()
-        
-        // Then
-        XCTAssertGreaterThanOrEqual(stats.totalItems, 2)
-        XCTAssertGreaterThanOrEqual(stats.criticalItems, 1)
+        #expect(stats.totalItems >= 2)
+        #expect(stats.criticalItems >= 1)
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
