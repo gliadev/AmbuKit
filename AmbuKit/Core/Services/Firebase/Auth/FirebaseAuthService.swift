@@ -235,7 +235,11 @@ final class FirebaseAuthService: ObservableObject {
             
             // Cerrar sesión si está inactivo
             Task {
-                try? await signOut()
+                do {
+                    try await signOut()
+                } catch {
+                    print("⚠️ Sign-out fallido: \(error)")
+                }
             }
             
             isLoading = false

@@ -16,7 +16,6 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showingForgotPassword = false
-    @State private var showingError = false
     @State private var isPasswordVisible = false
     
     // MARK: - Focus
@@ -62,16 +61,16 @@ struct LoginView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Error", isPresented: $showingError, presenting: appState.currentError) { _ in
-                Button("Aceptar", role: .cancel) { appState.clearError() }
-            } message: { error in
-                Text(error.errorDescription ?? "Error desconocido")
+            .alert("Error", isPresented: Binding(
+                get: { appState.currentError != nil },
+                set: { if !$0 { appState.clearError() } }
+            )) {
+                Button("Aceptar", role: .cancel) { }
+            } message: {
+                Text(appState.currentError?.errorDescription ?? "Error desconocido")
             }
             .sheet(isPresented: $showingForgotPassword) {
                 ForgotPasswordView()
-            }
-            .onChange(of: appState.currentError != nil ) { _, newValue in
-                showingError = newValue
             }
         }
     }

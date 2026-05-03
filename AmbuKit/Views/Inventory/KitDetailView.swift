@@ -63,8 +63,11 @@ struct KitDetailView: View {
         .task {
             await loadData()
         }
-        .alert("Error", isPresented: .constant(errorMessage != nil)) {
-            Button("OK") { errorMessage = nil }
+        .alert("Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") { }
         } message: {
             Text(errorMessage ?? "")
         }

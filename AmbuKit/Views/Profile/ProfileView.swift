@@ -25,35 +25,33 @@ struct ProfileView: View {
     // MARK: - Body
     
     var body: some View {
-        NavigationStack {
-            List {
-                // MARK: User Info Section
-                userInfoSection
-                
-                // MARK: Details Section
-                detailsSection
-                
-                // MARK: Permissions Section
-                if let role = currentUser.role {
-                    permissionsSection(role: role)
-                }
-                
-                // MARK: Actions Section
-                actionsSection
+        List {
+            // MARK: User Info Section
+            userInfoSection
+
+            // MARK: Details Section
+            detailsSection
+
+            // MARK: Permissions Section
+            if let role = currentUser.role {
+                permissionsSection(role: role)
             }
-            .navigationTitle("Perfil")
-            .confirmationDialog(
-                "¿Cerrar sesión?",
-                isPresented: $showingLogoutConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Cerrar Sesión", role: .destructive) {
-                    Task { await handleLogout() }
-                }
-                Button("Cancelar", role: .cancel) { }
-            } message: {
-                Text("Se cerrará tu sesión y volverás a la pantalla de inicio")
+
+            // MARK: Actions Section
+            actionsSection
+        }
+        .navigationTitle("Perfil")
+        .confirmationDialog(
+            "¿Cerrar sesión?",
+            isPresented: $showingLogoutConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Cerrar Sesión", role: .destructive) {
+                Task { await handleLogout() }
             }
+            Button("Cancelar", role: .cancel) { }
+        } message: {
+            Text("Se cerrará tu sesión y volverás a la pantalla de inicio")
         }
     }
     

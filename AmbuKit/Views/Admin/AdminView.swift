@@ -37,16 +37,14 @@ struct AdminView: View {
     // MARK: - Body
     
     var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading {
-                    loadingView
-                } else {
-                    adminContent
-                }
+        Group {
+            if isLoading {
+                loadingView
+            } else {
+                adminContent
             }
-            .navigationTitle("Gestión")
         }
+        .navigationTitle("Gestión")
         .task {
             await loadPermissions()
         }

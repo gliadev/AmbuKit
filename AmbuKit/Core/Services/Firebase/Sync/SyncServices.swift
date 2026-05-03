@@ -157,6 +157,9 @@ final class SyncService: ObservableObject {
     
     /// Flag para evitar sincronizaciones concurrentes
     private var syncTask: Task<Void, Never>?
+
+    /// Task de reset de estado post-sincronización
+    private var resetTask: Task<Void, Never>?
     
     // MARK: - Initialization
     
@@ -189,7 +192,9 @@ final class SyncService: ObservableObject {
                 
                 Task { @MainActor in
                     // Pequeño delay para asegurar conexión estable
-                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 segundo
+                    guard !Task.isCancelled else { return }
+                    try? await Task.sleep(for: .seconds(1))
+                    guard !Task.isCancelled else { return }
                     await self.syncPendingOperations()
                 }
             }
@@ -292,7 +297,8 @@ final class SyncService: ObservableObject {
             }
             
             // Pequeño delay entre operaciones para no saturar
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 segundos
+            guard !Task.isCancelled else { break }
+            try? await Task.sleep(for: .milliseconds(100))
         }
         
         // Finalizar sincronización
@@ -329,8 +335,9 @@ final class SyncService: ObservableObject {
         await updatePendingCount()
         
         // Resetear estado a idle después de un momento
-        Task {
-            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 segundos
+        resetTask?.cancel()
+        resetTask = Task {
+            try? await Task.sleep(for: .seconds(3))
             if self.state == .completed {
                 self.state = .idle
             }

@@ -143,7 +143,8 @@ struct AnimatedSaveButton: View {
         case .success:
             successTrigger += 1
             // Auto-reset después de 2 segundos
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
                 if state == .success {
                     state = .idle
                 }
@@ -151,7 +152,8 @@ struct AnimatedSaveButton: View {
         case .error:
             errorTrigger += 1
             // Auto-reset después de 3 segundos
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            Task {
+                try? await Task.sleep(for: .seconds(3))
                 if case .error = state {
                     state = .idle
                 }
@@ -223,7 +225,7 @@ struct AnimatedSaveButtonDemo: View {
         VStack(spacing: 20) {
             AnimatedSaveButton(state: $state) {
                 // Simular guardado
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(for: .seconds(1.5))
                 state = Bool.random() ? .success : .error("Error de red")
             }
             .scaleEffect(1.3)
