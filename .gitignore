@@ -31,6 +31,9 @@ GoogleService-Info.plist
 # Claude AI
 claude.md
 CLAUDE.md
+.claude/
+.tmp/
+
 # Node.js (SecurityTests)
 node_modules/
 
@@ -39,3 +42,10 @@ node_modules/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# Documentación interna de planificación (no se publica)
+MEJORAS.md
+ROADMAP.md
+
+# Skills locales / ayudas externas al proyecto
+mejorasswiftuipro/
