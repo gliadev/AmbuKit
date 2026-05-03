@@ -54,8 +54,8 @@ struct InventoryView: View {
         // Aplicar búsqueda
         if !searchText.isEmpty {
             result = result.filter {
-                $0.code.localizedCaseInsensitiveContains(searchText) ||
-                $0.name.localizedCaseInsensitiveContains(searchText)
+                $0.code.localizedStandardContains(searchText) ||
+                $0.name.localizedStandardContains(searchText)
             }
         }
         
@@ -88,9 +88,70 @@ struct InventoryView: View {
         }
     }
     
-    // MARK: - Filter Menu
-    
+    // MARK: - Subviews
+
     private var filterMenu: some View {
+        InventoryFilterMenu(selectedFilter: $selectedFilter)
+    }
+
+    private var loadingView: some View {
+        InventoryLoadingView()
+    }
+
+    private var emptyStateView: some View {
+        InventoryEmptyStateView()
+    }
+
+    private var kitsList: some View {
+        InventoryKitsList(
+            filteredKits: filteredKits,
+            kits: kits,
+            currentUser: currentUser,
+            onRefresh: { await loadKits() }
+        )
+    }
+
+    // MARK: - Load Kits
+    
+    private func loadKits() async {
+        isLoading = kits.isEmpty
+        kits = await KitService.shared.getAllKits()
+        isLoading = false
+    }
+}
+
+// MARK: - InventoryLoadingView
+
+private struct InventoryLoadingView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+            Text("Cargando kits...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - InventoryEmptyStateView
+
+private struct InventoryEmptyStateView: View {
+    var body: some View {
+        ContentUnavailableView {
+            Label("No hay kits", systemImage: "shippingbox")
+        } description: {
+            Text("Añade kits desde la pestaña Gestión.")
+        }
+    }
+}
+
+// MARK: - InventoryFilterMenu
+
+private struct InventoryFilterMenu: View {
+    @Binding var selectedFilter: KitFilter
+
+    var body: some View {
         Menu {
             ForEach(KitFilter.allCases, id: \.self) { filter in
                 Button {
@@ -110,37 +171,20 @@ struct InventoryView: View {
                   : "line.3.horizontal.decrease.circle.fill")
         }
     }
-    
-    // MARK: - Loading View
-    
-    private var loadingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-            Text("Cargando kits...")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    // MARK: - Empty State
-    
-    private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label("No hay kits", systemImage: "shippingbox")
-        } description: {
-            Text("Añade kits desde la pestaña Gestión.")
-        }
-    }
-    
-    // MARK: - Kits List
-    
-    private var kitsList: some View {
+}
+
+// MARK: - InventoryKitsList
+
+private struct InventoryKitsList: View {
+    let filteredKits: [KitFS]
+    let kits: [KitFS]
+    let currentUser: UserFS
+    let onRefresh: () async -> Void
+
+    var body: some View {
         List {
-            // Header con estadísticas
-            statsHeader
-            
-            // Lista de kits
+            InventoryStatsHeader(kits: kits)
+
             ForEach(filteredKits) { kit in
                 NavigationLink {
                     KitDetailView(kit: kit, currentUser: currentUser)
@@ -151,13 +195,17 @@ struct InventoryView: View {
         }
         .listStyle(.insetGrouped)
         .refreshable {
-            await loadKits()
+            await onRefresh()
         }
     }
-    
-    // MARK: - Stats Header
-    
-    private var statsHeader: some View {
+}
+
+// MARK: - InventoryStatsHeader
+
+private struct InventoryStatsHeader: View {
+    let kits: [KitFS]
+
+    var body: some View {
         Section {
             HStack(spacing: 12) {
                 StatBadge(
@@ -166,21 +214,21 @@ struct InventoryView: View {
                     color: .blue,
                     icon: "shippingbox.fill"
                 )
-                
+
                 StatBadge(
                     count: kits.filter { $0.status == .active }.count,
                     label: "Activos",
                     color: .green,
                     icon: "checkmark.circle.fill"
                 )
-                
+
                 StatBadge(
                     count: kits.filter { $0.needsAudit }.count,
                     label: "Auditoría",
                     color: .purple,
                     icon: "clipboard.fill"
                 )
-                
+
                 StatBadge(
                     count: kits.filter { !$0.isAssigned }.count,
                     label: "Libres",
@@ -190,14 +238,6 @@ struct InventoryView: View {
             }
             .padding(.vertical, 8)
         }
-    }
-    
-    // MARK: - Load Kits
-    
-    private func loadKits() async {
-        isLoading = kits.isEmpty
-        kits = await KitService.shared.getAllKits()
-        isLoading = false
     }
 }
 
@@ -217,177 +257,6 @@ enum KitFilter: CaseIterable {
         case .needsAudit: return "Auditoría"
         case .unassigned: return "Sin Asignar"
         case .maintenance: return "Mantenimiento"
-        }
-    }
-}
-
-// MARK: - Stat Badge
-
-struct StatBadge: View {
-    let count: Int
-    let label: String
-    let color: Color
-    let icon: String
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.caption)
-                Text("\(count)")
-                    .font(.title3.bold())
-            }
-            .foregroundStyle(color)
-            
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Kit Row View
-
-struct KitRowView: View {
-    let kit: KitFS
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Icono del tipo de kit
-            kitTypeIcon
-            
-            // Info principal
-            VStack(alignment: .leading, spacing: 4) {
-                // Código y badge de estado
-                HStack {
-                    Text(kit.code)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    statusBadge
-                }
-                
-                // Nombre
-                Text(kit.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                
-                // Info adicional
-                HStack(spacing: 8) {
-                    // Tipo de kit
-                    Text(kit.type)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(kitTypeColor.opacity(0.1))
-                        .foregroundStyle(kitTypeColor)
-                        .clipShape(Capsule())
-                    
-                    // Asignación
-                    if kit.isAssigned {
-                        HStack(spacing: 2) {
-                            Image(systemName: "car.fill")
-                            Text("Asignado")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                    }
-                    
-                    // Auditoría
-                    if kit.needsAudit {
-                        HStack(spacing: 2) {
-                            Image(systemName: "clipboard")
-                            Text("Auditar")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.purple)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-    
-    // MARK: - Kit Type Icon
-    
-    @ViewBuilder
-    private var kitTypeIcon: some View {
-        ZStack {
-            Circle()
-                .fill(kitTypeColor.opacity(0.15))
-                .frame(width: 44, height: 44)
-            
-            Image(systemName: kitTypeSystemImage)
-                .font(.title3)
-                .foregroundStyle(kitTypeColor)
-        }
-    }
-    
-    /// Icono del sistema según el tipo de kit
-    private var kitTypeSystemImage: String {
-        let type = kit.type.lowercased()
-        
-        if type.contains("sva") {
-            return "cross.case.fill"
-        } else if type.contains("svb") {
-            return "shippingbox.fill"
-        } else if type.contains("ped") {
-            return "figure.and.child.holdinghands"
-        } else if type.contains("trauma") {
-            return "bandage.fill"
-        } else if type.contains("ampul") {
-            return "pills.fill"
-        } else {
-            return "cross.case.fill"
-        }
-    }
-    
-    /// Color según el tipo de kit
-    private var kitTypeColor: Color {
-        let type = kit.type.lowercased()
-        
-        if type.contains("sva") {
-            return .red
-        } else if type.contains("svb") {
-            return .blue
-        } else if type.contains("ped") {
-            return .pink
-        } else if type.contains("trauma") {
-            return .orange
-        } else if type.contains("ampul") {
-            return .purple
-        } else {
-            return .blue
-        }
-    }
-    
-    // MARK: - Status Badge
-    
-    @ViewBuilder
-    private var statusBadge: some View {
-        Text(kit.status.displayName)
-            .font(.caption.bold())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(statusColor.opacity(0.15))
-            .foregroundStyle(statusColor)
-            .clipShape(Capsule())
-    }
-    
-    /// Color según el estado del kit
-    private var statusColor: Color {
-        switch kit.status {
-        case .active:
-            return .green
-        case .inactive:
-            return .gray
-        case .maintenance:
-            return .orange
-        case .expired:
-            return .red
         }
     }
 }

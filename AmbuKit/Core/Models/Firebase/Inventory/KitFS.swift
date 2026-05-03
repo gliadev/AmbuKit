@@ -47,7 +47,12 @@ public struct KitFS: Codable, Identifiable, Sendable {
     public var updatedAt: Date
     
     // MARK: - Computed Properties (solo para UI)
-    
+
+    /// Tipo tipado del kit (fallback a .custom si el valor no coincide)
+    public var kitType: KitType {
+        KitType(rawValue: type) ?? .custom
+    }
+
     /// Vehículo cargado (debe obtenerse de Firestore)
     /// Este campo NO se guarda en Firestore
     public var vehicle: VehicleFS? = nil

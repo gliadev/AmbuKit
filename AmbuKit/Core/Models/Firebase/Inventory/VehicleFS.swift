@@ -8,6 +8,7 @@
 
 import Foundation
 import FirebaseFirestore
+import SwiftUI
 import Combine
 
 /// Modelo de vehículo para Firestore
@@ -140,27 +141,25 @@ public extension VehicleFS {
             }
         }
         
-        /// Icono SF Symbol
-        var icon: String {
+        var systemImage: String {
             switch self {
-            case .svb: return "cross.case"
-            case .sva: return "cross.case.fill"
-            case .svae: return "cross.case.fill"
-            case .tsnu: return "car.side"
-            case .vir: return "car.fill"
+            case .svb:        return "cross.case"
+            case .sva:        return "cross.case.fill"
+            case .svae:       return "cross.case.fill"
+            case .tsnu:       return "car.side"
+            case .vir:        return "car.fill"
             case .helicopter: return "airplane"
             }
         }
-        
-        /// Color asociado (para UI)
-        var colorName: String {
+
+        var color: Color {
             switch self {
-            case .svb: return "blue"
-            case .sva: return "red"
-            case .svae: return "orange"
-            case .tsnu: return "green"
-            case .vir: return "purple"
-            case .helicopter: return "yellow"
+            case .svb:        return .blue
+            case .sva:        return .red
+            case .svae:       return .orange
+            case .tsnu:       return .green
+            case .vir:        return .purple
+            case .helicopter: return .yellow
             }
         }
         

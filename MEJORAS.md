@@ -13,7 +13,7 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 - **Problema:** Ambas vistas crean su propio `NavigationStack` pero se presentan como destino de `NavigationLink` dentro del stack de `MoreMenuView`. Esto produce stacks anidados que rompen el gesture-back y la profundidad de navegación.
 - **Fix:** Eliminar el `NavigationStack` de `AdminView` y `ProfileView`. El stack de `MoreMenuView` ya lo provee. Reemplazar por `Group { ... }.navigationTitle(...)`.
 
-### 🔴 M2 — `.tabItem {}` deprecated → `Tab` API
+### ✅ M2 — `.tabItem {}` deprecated → `Tab` API
 - **Archivo:** `Views/Components/MainTabView.swift:74–115`
 - **Problema:** Usa el API `tabItem` deprecado. La selección también usa `Int` en lugar de un enum tipado.
 - **Fix:** Migrar a `Tab("Label", systemImage:, value:) { ... }` con `@State private var selectedTab: AppTab = .inventory` donde `AppTab` es un enum `CaseIterable`.
@@ -27,27 +27,27 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 
 ## Prioridad MEDIA
 
-### 🔴 M4 — Stringly typed: tipo de kit y tipo de vehículo
+### ✅ M4 — Stringly typed: tipo de kit y tipo de vehículo
 - **Archivos:** `Views/Inventory/InventoryView.swift:330`, `Views/Vehicles/VehiclesView.swift:318,446`
 - **Problema:** Los mapeos tipo→icono y tipo→color se hacen con `.lowercased().contains("sva")` o `.uppercased() == "SVA"` dispersos en 4+ vistas. El dominio ya tiene `KitType` y `VehicleFS.VehicleType`.
 - **Fix:** Añadir extensiones `var color: Color` y `var systemImage: String` al enum existente. Mover allí toda la lógica visual del dominio. Eliminar switch duplicado en `VehicleRowView` y `VehicleDetailScreen`.
 
-### 🔴 M5 — Búsqueda con API incorrecta
+### ✅ M5 — Búsqueda con API incorrecta
 - **Archivos:** `Views/Inventory/InventoryView.swift:57`, `Views/Vehicles/VehiclesView.swift:84`, `Views/Admin/ManagementViews.swift:30`
 - **Problema:** Usan `localizedCaseInsensitiveContains` o `.lowercased().contains()`. La regla del proyecto exige `localizedStandardContains()` para input del usuario.
 - **Fix:** Reemplazar globalmente con `localizedStandardContains`.
 
-### 🔴 M6 — `showsIndicators: false` deprecated en ScrollView
+### ✅ M6 — `showsIndicators: false` deprecated en ScrollView
 - **Archivo:** `Views/Vehicles/VehiclesView.swift:159,205`
 - **Problema:** `ScrollView(.horizontal, showsIndicators: false)` es el inicializador antiguo.
 - **Fix:** Quitar el parámetro del init y añadir `.scrollIndicators(.hidden)` como modificador.
 
-### 🔴 M7 — Computed properties devolviendo vistas (extraer a structs)
+### ✅ M7 — Computed properties devolviendo vistas (extraer a structs)
 - **Archivos:** `MainTabView.swift` (loadingView, mainTabView), `RootView.swift` (splashScreen, loadingScreen), `InventoryView.swift` (loadingView, emptyStateView, kitsList, statsHeader), `VehiclesView.swift` (loadingView, emptyView, statsHeader, filterMenu), `AdminView.swift` (loadingView, adminContent), `KitDetailView.swift` (loadingView, emptyStateView, contentView)
 - **Problema:** Usar `private var xxx: some View` penaliza performance y no es el patrón SwiftUI recomendado; SwiftUI no puede optimizarlos como nodos del árbol independientes.
 - **Fix:** Convertir cada computed view property en un `View` struct dedicado, en su propio archivo cuando sea reutilizable.
 
-### 🔴 M8 — Múltiples structs por archivo
+### ✅ M8 — Múltiples structs por archivo
 - **Archivos:** `AdminView.swift` (5 tipos), `VehiclesView.swift` (5 tipos), `InventoryView.swift` (4 tipos), `MainTabView.swift` (3 tipos)
 - **Problema:** Viola la regla del proyecto: un tipo = un archivo.
 - **Fix:** Separar cada struct en su propio archivo dentro del feature folder correspondiente.
@@ -57,12 +57,12 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 - **Problema:** `showingError: Bool` es un mirror de `appState.currentError != nil`, sincronizado con `onChange`. Doble fuente de verdad.
 - **Fix:** Eliminar `showingError` y usar un `Binding` directo al optional o `alert(item:)`.
 
-### 🔴 M10 — `@EnvironmentObject` no utilizado en MainTabView
+### ✅ M10 — `@EnvironmentObject` no utilizado en MainTabView
 - **Archivo:** `Views/Components/MainTabView.swift:24`
 - **Problema:** `@EnvironmentObject private var appState` declarado pero nunca referenciado en body ni en métodos de instancia.
 - **Fix:** Eliminar la declaración.
 
-### 🔴 M11 — `UITabBarAppearance` innecesario
+### ✅ M11 — `UITabBarAppearance` innecesario
 - **Archivo:** `Views/Components/MainTabView.swift:141–146`
 - **Problema:** Llama a `UITabBarAppearance` via UIKit solo para configurar apariencia por defecto. No añade comportamiento exclusivo.
 - **Fix:** Eliminar `configureTabBarAppearance()`. En iOS 26 la apariencia por defecto es correcta.
@@ -72,7 +72,7 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 - **Problema:** `svaCount`, `svbCount`, `withBaseCount`, `withKitsCount`, `totalCount` iteran el array cinco veces en cinco computed properties separadas.
 - **Fix:** Calcular todo en una sola pasada dentro de `loadData()` o con una struct `VehicleStats`.
 
-### 🔴 M13 — `filter { $0 }.count` → `count(where:)`
+### ✅ M13 — `filter { $0 }.count` → `count(where:)`
 - **Archivo:** `Views/Admin/AdminView.swift:142`
 - **Fix:** `[...].count(where: { $0 })`
 
@@ -209,7 +209,7 @@ Revisado: 2026-05-03 | Herramientas: swiftui-pro + swift-concurrency-pro
 
 ## Prioridad BAJA
 
-### 🔴 M14 — `roleColor` duplicado en tres vistas
+### ✅ M14 — `roleColor` duplicado en tres vistas
 - **Archivos:** `MainTabView.swift:301`, `AdminView.swift:460`, `ProfileView.swift:202`
 - **Fix:** Añadir `var color: Color` como extensión de `RoleKind`.
 

@@ -888,8 +888,8 @@ struct VehicleInBaseRow: View {
                         .font(.caption)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(typeColor.opacity(0.2))
-                        .foregroundStyle(typeColor)
+                        .background(vehicle.vehicleType.color.opacity(0.2))
+                        .foregroundStyle(vehicle.vehicleType.color)
                         .clipShape(Capsule())
                 }
                 
@@ -914,16 +914,6 @@ struct VehicleInBaseRow: View {
         .padding(.vertical, 2)
     }
     
-    private var typeColor: Color {
-        switch vehicle.vehicleType {
-        case .svb: return .blue
-        case .sva: return .red
-        case .svae: return .orange
-        case .tsnu: return .green
-        case .vir: return .purple
-        case .helicopter: return .yellow
-        }
-    }
 }
 
 

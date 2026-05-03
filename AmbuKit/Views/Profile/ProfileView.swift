@@ -198,12 +198,7 @@ struct ProfileView: View {
     // MARK: - Helpers
     
     private var roleColor: Color {
-        guard let role = currentUser.role else { return .blue }
-        switch role.kind {
-        case .programmer: return .blue
-        case .logistics: return .orange
-        case .sanitary: return .green
-        }
+        currentUser.role?.kind.color ?? .blue
     }
     
     // MARK: - Actions

@@ -48,40 +48,16 @@ struct RootView: View {
         }
     }
     
-    // MARK: - Splash Screen
-    
+    // MARK: - Subviews
+
     private var splashScreen: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "cross.case.fill")
-                .font(.system(size: 72))
-                .foregroundStyle(.blue)
-                .symbolRenderingMode(.hierarchical)
-            
-            Text("AmbuKit")
-                .font(.largeTitle.bold())
-            
-            ProgressView()
-                .tint(.blue)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
+        RootSplashView()
     }
-    
-    // MARK: - Loading Screen
-    
+
     private var loadingScreen: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .tint(.blue)
-            
-            Text("Cargando información...")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
+        RootLoadingView()
     }
-    
+
     // MARK: - Initialization
     
     private func initialize() async {
@@ -91,6 +67,44 @@ struct RootView: View {
         withAnimation {
             isInitialized = true
         }
+    }
+}
+
+// MARK: - RootSplashView
+
+private struct RootSplashView: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "cross.case.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.blue)
+                .symbolRenderingMode(.hierarchical)
+
+            Text("AmbuKit")
+                .font(.largeTitle.bold())
+
+            ProgressView()
+                .tint(.blue)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+    }
+}
+
+// MARK: - RootLoadingView
+
+private struct RootLoadingView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .tint(.blue)
+
+            Text("Cargando información...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
 }
 

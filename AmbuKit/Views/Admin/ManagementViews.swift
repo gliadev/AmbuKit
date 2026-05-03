@@ -27,8 +27,8 @@ struct KitManagementView: View {
             return kits
         }
         return kits.filter {
-            $0.code.localizedCaseInsensitiveContains(searchText) ||
-            $0.name.localizedCaseInsensitiveContains(searchText)
+            $0.code.localizedStandardContains(searchText) ||
+            $0.name.localizedStandardContains(searchText)
         }
     }
     
@@ -267,8 +267,8 @@ struct BaseManagementView: View {
             return bases
         }
         return bases.filter {
-            $0.code.localizedCaseInsensitiveContains(searchText) ||
-            $0.name.localizedCaseInsensitiveContains(searchText)
+            $0.code.localizedStandardContains(searchText) ||
+            $0.name.localizedStandardContains(searchText)
         }
     }
     
@@ -622,8 +622,8 @@ struct VehicleMgmtRow: View {
                     .font(.caption)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(vehicleTypeColor.opacity(0.2))
-                    .foregroundStyle(vehicleTypeColor)
+                    .background(vehicle.vehicleType.color.opacity(0.2))
+                    .foregroundStyle(vehicle.vehicleType.color)
                     .clipShape(Capsule())
             }
             if let plate = vehicle.plate {
@@ -638,17 +638,8 @@ struct VehicleMgmtRow: View {
         .padding(.vertical, 4)
     }
     
-    private var vehicleTypeColor: Color {
-        switch vehicle.vehicleType {
-        case .svb: return .blue
-        case .sva: return .red
-        case .svae: return .orange
-        case .tsnu: return .green
-        case .vir: return .purple
-        case .helicopter: return .yellow
-        }
-    }
 }
+
 
 // MARK: - Create Vehicle Sheet
 
